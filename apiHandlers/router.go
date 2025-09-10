@@ -6,12 +6,12 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-func SetupRoutes(app *fiber.App) {
+func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware) {
 
 	app.Get("/", func(c *fiber.Ctx) error {
 		return c.SendString("Hello from Fiber on Render!")
 	})
 
-	app.Post("/doctor", api.CreateDoctor)
-	app.Get("/doctors", api.FindAllDoctors)
+	app.Post("/doctor", authMiddleware.ValidateToken, api.CreateDoctor)
+	app.Get("/doctors", authMiddleware.ValidateToken, api.FindAllDoctors)
 }

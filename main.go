@@ -3,7 +3,9 @@ package main
 import (
 	"lawyerSL-Backend/apiHandlers"
 	"lawyerSL-Backend/dbConfigs"
+	"lawyerSL-Backend/dto"
 	"log"
+	"os"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -13,7 +15,18 @@ func main(){
 
 	dbConfigs.ConnectMongoDB("mongodb+srv://admin:W6ptbj7HPS3RJ4cU@cluster0.tgypip5.mongodb.net/")
 
-	apiHandlers.SetupRoutes(app)
+	firebaseApp, err := apiHandlers.InitFirebaseApp()
+	if err != nil {
+		log.Fatalf("❌ Failed to initialize Firebase: %v", err)
+	}
+
+	authConfig := dto.AuthConfig{
+		FirebaseProjectID: os.Getenv("FIREBASE_PROJECT_ID"),
+	}
+
+	authMiddleware := apiHandlers.NewAuthMiddleware(authConfig, firebaseApp)
+
+	apiHandlers.SetupRoutes(app, authMiddleware)
 
 	log.Fatal(app.Listen(":3000"))
 }
