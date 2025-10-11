@@ -16,4 +16,6 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware) {
 	app.Get("/doctors", authMiddleware.ValidateToken, api.FindAllDoctors)
 	app.Get("/doctor-info", api.FindDoctorInfoByName)
 	app.Post("/doctor-info", api.CreateDoctorInfo)
+	app.Get("/doctor-info/favorite", api.GetFavoriteDoctors)
+	app.Put("/doctor-info/favorite", api.ToggleFavoriteDoctor)
 }
