@@ -29,3 +29,13 @@ jobs:
         file: ./Dockerfile
         push: true
         tags: ${{ secrets.DOCKERHUB_USERNAME }}/skin-firts:latest
+  deploy:
+    needs: build-and-push
+    runs-on: self-hosted
+    steps:
+      - name: Pull docker image
+        run: docker pull nadilgt/skin-firts:latest
+      - name: Delete old container
+        run: docker rm -f skin-firts-container
+      - name: Run docker container
+        run: docker run -d -p 3000:3000 --name skin-firts-container nadilgt/skin-firts:latest
