@@ -8,7 +8,7 @@ import (
 )
 
 func CreateDoctor(c *fiber.Ctx) error {
-	var doctor dto.Doctor
+	var doctor dto.DoctorInfoModel
 	if err := c.BodyParser(&doctor); err != nil {
 		return c.Status(400).JSON(fiber.Map{
 			"error":"Invalid request body",

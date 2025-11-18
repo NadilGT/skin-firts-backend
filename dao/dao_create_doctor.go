@@ -6,7 +6,7 @@ import (
 	"lawyerSL-Backend/dto"
 )
 
-func DB_CreateDoctor(doctor dto.Doctor) error {
+func DB_CreateDoctor(doctor dto.DoctorInfoModel) error {
 	_, err := dbConfigs.FeaturedLawyerCollection.InsertOne(context.Background(), doctor)
 	if err != nil {
 		return err

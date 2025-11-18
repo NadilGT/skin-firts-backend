@@ -13,6 +13,7 @@ import (
 var MongoClient *mongo.Client
 var FeaturedLawyerCollection *mongo.Collection
 var DoctorInfoCollection *mongo.Collection
+var AppointmentCollection *mongo.Collection
 
 func ConnectMongoDB(uri string) *mongo.Client {
 	client, err := mongo.NewClient(options.Client().ApplyURI(uri))
@@ -33,6 +34,7 @@ func ConnectMongoDB(uri string) *mongo.Client {
 
 	FeaturedLawyerCollection = db.Collection("Doctors")
 	DoctorInfoCollection = db.Collection("doctor_info")
+	AppointmentCollection = db.Collection("appointments")
 
 	return client
 }
