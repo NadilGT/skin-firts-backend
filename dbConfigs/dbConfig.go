@@ -15,6 +15,7 @@ var FeaturedLawyerCollection *mongo.Collection
 var DoctorInfoCollection *mongo.Collection
 var AppointmentCollection *mongo.Collection
 var DoctorScheduleCollection *mongo.Collection
+var MedicineCollection *mongo.Collection
 
 func ConnectMongoDB(uri string) *mongo.Client {
 	client, err := mongo.NewClient(options.Client().ApplyURI(uri))
@@ -37,6 +38,7 @@ func ConnectMongoDB(uri string) *mongo.Client {
 	DoctorInfoCollection = db.Collection("doctor_info")
 	AppointmentCollection = db.Collection("appointments")
 	DoctorScheduleCollection = db.Collection("doctor_schedules")
+	MedicineCollection = db.Collection("medicines")
 
 	return client
 }

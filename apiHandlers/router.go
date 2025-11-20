@@ -21,9 +21,17 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware) {
 	app.Post("/create/appointment", api.CreateAppointment)
 	app.Get("/findAll/appointments", api.GetAllAppointments)
 	app.Put("/appointments/:id/reschedule", api.RescheduleAppointment)
+	app.Patch("/appointments/:id/status", api.UpdateAppointmentStatus)
 
 	app.Post("/doctor-schedule", api.CreateDoctorSchedule)
 	app.Get("/doctor-schedule", api.GetDoctorSchedule)
 	app.Get("/doctor-schedule/range", api.GetDoctorScheduleByDateRange)
 	app.Delete("/doctor-schedule", api.DeleteDoctorSchedule)
+
+	app.Post("/medicines", api.CreateMedicine)
+	app.Get("/medicines/search", api.SearchMedicines)
+	app.Get("/medicines/low-stock", api.GetLowStockMedicines)
+	app.Get("/medicines/:id", api.GetMedicineByID)
+	app.Put("/medicines/:id", api.UpdateMedicine)
+	app.Delete("/medicines/:id", api.DeleteMedicine)
 }
