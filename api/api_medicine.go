@@ -1,8 +1,10 @@
 package api
 
 import (
+	"context"
 	"lawyerSL-Backend/dao"
 	"lawyerSL-Backend/dto"
+	"lawyerSL-Backend/utils"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -30,6 +32,12 @@ func CreateMedicine(c *fiber.Ctx) error {
 		})
 	}
 
+	id, err := dao.GenerateId(context.Background(), "medicines", "MED")
+	if err != nil {
+		return utils.SendErrorResponse(c, fiber.StatusInternalServerError, err.Error())
+	}
+
+	medicine.MedicineId = id
 	medicine.CreatedAt = time.Now()
 	medicine.UpdatedAt = time.Now()
 	if medicine.Status == "" {
