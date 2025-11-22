@@ -164,3 +164,33 @@ func DeleteDoctorSchedule(c *fiber.Ctx) error {
 		"message": "Schedule deleted successfully",
 	})
 }
+
+// DeleteTimeSlotFromSchedule removes a specific time slot from a doctor's schedule
+func DeleteTimeSlotFromSchedule(c *fiber.Ctx) error {
+	doctorName := c.Query("doctorName")
+	dateStr := c.Query("date")
+	timeSlot := c.Query("timeSlot")
+
+	if doctorName == "" || dateStr == "" || timeSlot == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Doctor name, date, and timeSlot are required",
+		})
+	}
+
+	date, err := time.Parse("2006-01-02", dateStr)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid date format. Use YYYY-MM-DD",
+		})
+	}
+
+	if err := dao.DB_DeleteTimeSlotFromSchedule(doctorName, date, timeSlot); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"message": "Time slot deleted successfully",
+	})
+}

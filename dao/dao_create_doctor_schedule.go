@@ -2,6 +2,7 @@ package dao
 
 import (
 	"context"
+	"fmt"
 	"lawyerSL-Backend/dbConfigs"
 	"lawyerSL-Backend/dto"
 	"time"
@@ -97,4 +98,29 @@ func DB_DeleteDoctorSchedule(doctorName string, date time.Time) error {
 
 	_, err := dbConfigs.DoctorScheduleCollection.DeleteOne(context.Background(), filter)
 	return err
+}
+
+// DB_DeleteTimeSlotFromSchedule removes a specific time slot from a doctor's schedule
+func DB_DeleteTimeSlotFromSchedule(doctorName string, date time.Time, timeSlot string) error {
+	filter := bson.M{
+		"doctorName": doctorName,
+		"date":       date,
+	}
+
+	update := bson.M{
+		"$pull": bson.M{
+			"timeSlots": timeSlot,
+		},
+	}
+
+	result, err := dbConfigs.DoctorScheduleCollection.UpdateOne(context.Background(), filter, update)
+	if err != nil {
+		return err
+	}
+
+	if result.MatchedCount == 0 {
+		return fmt.Errorf("schedule not found for doctor %s on %s", doctorName, date.Format("2006-01-02"))
+	}
+
+	return nil
 }
