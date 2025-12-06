@@ -33,7 +33,7 @@ func main() {
 
 	authMiddleware := apiHandlers.NewAuthMiddleware(authConfig, firebaseApp)
 
-	apiHandlers.SetupRoutes(app, authMiddleware)
+	apiHandlers.SetupRoutes(app, authMiddleware, firebaseApp)
 
 	port := os.Getenv("PORT")
 	if port == "" {
