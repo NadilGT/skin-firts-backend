@@ -8,10 +8,17 @@ import (
 	"os"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/cors"
 )
 
-func main(){
+func main() {
 	app := fiber.New()
+
+	app.Use(cors.New(cors.Config{
+		AllowOrigins: "http://localhost:8080,https://med-center-hub.vercel.app",
+		AllowHeaders: "Origin, Content-Type, Accept, Authorization",
+		AllowMethods: "GET, POST, PUT, DELETE, PATCH",
+	}))
 
 	dbConfigs.ConnectMongoDB("mongodb+srv://admin:W6ptbj7HPS3RJ4cU@cluster0.tgypip5.mongodb.net/")
 
@@ -26,7 +33,7 @@ func main(){
 
 	authMiddleware := apiHandlers.NewAuthMiddleware(authConfig, firebaseApp)
 
-	apiHandlers.SetupRoutes(app, authMiddleware)
+	apiHandlers.SetupRoutes(app, authMiddleware, firebaseApp)
 
 	port := os.Getenv("PORT")
 	if port == "" {

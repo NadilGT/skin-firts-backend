@@ -9,10 +9,10 @@ import (
 )
 
 func InitFirebaseApp() (*firebase.App, error) {
-    opt := option.WithCredentialsFile("./skin-firts-firebase-adminsdk-fbsvc-fa502744d8.json")
-    app, err := firebase.NewApp(context.Background(), nil, opt)
-    if err != nil {
-        return nil, fmt.Errorf("error initializing app: %v", err)
-    }
-    return app, nil
+	opt := option.WithCredentialsFile("./skin-firts-firebase-adminsdk-fbsvc-2ca9e81963.json")
+	app, err := firebase.NewApp(context.Background(), nil, opt)
+	if err != nil {
+		return nil, fmt.Errorf("error initializing app: %v", err)
+	}
+	return app, nil
 }
