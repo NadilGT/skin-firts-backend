@@ -4,12 +4,23 @@ import (
 	"lawyerSL-Backend/apiHandlers"
 	"lawyerSL-Backend/dbConfigs"
 	"lawyerSL-Backend/dto"
+	"lawyerSL-Backend/integrations"
 	"log"
 	"os"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
+	"github.com/joho/godotenv"
 )
+
+func init() {
+	err := godotenv.Load(".env")
+	if err != nil {
+		log.Fatal("Cannot load environment file")
+	}
+	integrations.SetEnvironmentVariables()
+}
+
 
 func main() {
 	app := fiber.New()
