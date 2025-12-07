@@ -26,8 +26,8 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 
 	// ========== DOCTOR ROUTES ==========
 	app.Post("/doctor", authMiddleware.ValidateToken, RequiresRole("admin"), api.CreateDoctor)
-	app.Get("/doctors", authMiddleware.ValidateToken, RequiresRole("admin"), api.FindAllDoctors)
-	app.Get("/doctor-info", authMiddleware.ValidateToken, RequiresRole("admin"), api.FindDoctorInfoByName)
+	app.Get("/doctors", authMiddleware.ValidateToken, api.FindAllDoctors)
+	app.Get("/doctor-info", authMiddleware.ValidateToken, api.FindDoctorInfoByName)
 	app.Post("/doctor-info", authMiddleware.ValidateToken, RequiresRole("admin"), api.CreateDoctorInfo)
 
 	// Public doctor routes
@@ -36,7 +36,7 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 
 	// ========== APPOINTMENT ROUTES ==========
 	app.Post("/create/appointment", api.CreateAppointment)
-	app.Get("/findAll/appointments", authMiddleware.ValidateToken, RequiresRole("admin"), api.GetAllAppointments)
+	app.Get("/findAll/appointments", authMiddleware.ValidateToken, api.GetAllAppointments)
 	app.Put("/appointments/:id/reschedule", api.RescheduleAppointment)
 	app.Patch("/appointments/:id/status", api.UpdateAppointmentStatus)
 
@@ -48,7 +48,7 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 	app.Delete("/doctor-schedule/time-slot", api.DeleteTimeSlotFromSchedule)
 
 	// ========== MEDICINE ROUTES ==========
-	app.Post("/medicines", api.CreateMedicine)
+	app.Post("/medicines",authMiddleware.ValidateToken, api.CreateMedicine)
 	app.Get("/medicines/search", api.SearchMedicines)
 	app.Get("/medicines/low-stock", api.GetLowStockMedicines)
 	app.Get("/medicines/:id", api.GetMedicineByID)

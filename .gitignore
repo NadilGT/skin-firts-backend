@@ -26,6 +26,7 @@ go.work
 go.work.sum
 
 # env file
+skin-firts-firebase-adminsdk-fbsvc-2ca9e81963.json
 .env
 
 # Editor/IDE
