@@ -13,17 +13,11 @@ import (
 	"github.com/joho/godotenv"
 )
 
-func init() {
-	err := godotenv.Load(".env")
-	if err != nil {
-		log.Fatal("Cannot load environment file")
-	}
-	integrations.SetEnvironmentVariables()
-}
-
-
 func main() {
 	app := fiber.New()
+
+	_ = godotenv.Load(".env")
+	integrations.SetEnvironmentVariables()
 
 	app.Use(cors.New(cors.Config{
 		AllowOrigins: "http://localhost:8080,https://med-center-hub.vercel.app",
