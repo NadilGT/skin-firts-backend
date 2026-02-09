@@ -34,14 +34,6 @@ jobs:
     needs: build-and-push
     runs-on: self-hosted
     steps:
-      - name: Fix Docker socket permissions
-        run: sudo chmod 666 /var/run/docker.sock
-
-      - name: Pull docker image
-        run: docker pull nadilgt/skin-firts:latest
-
-      - name: Delete old container
-        run: docker rm -f skin-firts-container || true
-
-      - name: Run docker container
-        run: docker run -d -p 3000:3000 --name skin-firts-container nadilgt/skin-firts:latest
+      - name: Trigger Render Deploy
+        if: success()
+        run: curl "${{ secrets.RENDER_DEPLOY_HOOK }}"
