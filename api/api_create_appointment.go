@@ -1,18 +1,20 @@
 package api
 
 import (
+	"context"
 	"fmt"
-	"lawyerSL-Backend/dto"
 	"lawyerSL-Backend/dao"
+	"lawyerSL-Backend/dto"
+	"lawyerSL-Backend/utils"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
 )
 
 var dateFormats = []string{
-	time.RFC3339,              // 2025-11-18T10:30:00Z
-	"2006-01-02",              // 2025-11-18
-	"2006-01-02 15:04",        // optional
+	time.RFC3339,       // 2025-11-18T10:30:00Z
+	"2006-01-02",       // 2025-11-18
+	"2006-01-02 15:04", // optional
 	"2006-01-02 15:04:05",
 }
 
@@ -33,6 +35,12 @@ func CreateAppointment(c *fiber.Ctx) error {
 			"error": "Invalid request body",
 		})
 	}
+
+	id, err := dao.GenerateId(context.Background(), "appointments", "APP")
+	if err != nil {
+		return utils.SendErrorResponse(c, fiber.StatusInternalServerError, err.Error())
+	}
+	req.AppointmentID = id
 
 	fmt.Println("Incoming appointmentDate:", req.AppointmentDate)
 
@@ -67,6 +75,7 @@ func CreateAppointment(c *fiber.Ctx) error {
 
 	// Build the model
 	appointment := dto.AppointmentModel{
+		AppointmentID:   req.AppointmentID,
 		PatientID:       req.PatientID,
 		PatientName:     req.PatientName,
 		PatientEmail:    req.PatientEmail,
