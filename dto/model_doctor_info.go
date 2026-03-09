@@ -1,6 +1,7 @@
 package dto
 
 type DoctorInfoModel struct {
+	DoctorID   string   `json:"doctor_id" bson:"doctor_id"`
 	Name       string   `json:"name" bson:"name"`
 	Experience int      `json:"experience" bson:"experience"`
 	Focus      string   `json:"focus" bson:"focus"`
@@ -12,5 +13,5 @@ type DoctorInfoModel struct {
 	Career     string   `json:"career" bson:"career"`
 	Highlights string   `json:"highlights" bson:"highlights"`
 	Favorite   bool     `json:"favorite" bson:"favorite"` 
-	ProfilePic string 	`json:"profilePic" bson:"profilePic"`
+	ProfilePic string 	`json:"profile_pic" bson:"profile_pic"`
 }
