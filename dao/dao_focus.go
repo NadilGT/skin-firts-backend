@@ -30,3 +30,19 @@ func DB_GetAllFocuses() ([]dto.FocusModel, error) {
 
 	return focuses, nil
 }
+
+func DB_CheckFocusExists(focus string) (bool, error) {
+	filter := bson.M{
+		"$or": []bson.M{
+			{"name": focus},
+			{"focusId": focus},
+		},
+	}
+
+	count, err := dbConfigs.FocusCollection.CountDocuments(context.Background(), filter)
+	if err != nil {
+		return false, err
+	}
+
+	return count > 0, nil
+}

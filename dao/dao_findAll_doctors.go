@@ -24,3 +24,23 @@ func DB_FindAllDoctors() (*[]dto.DoctorInfoModel, error) {
 	}
 	return &doctors, nil
 }
+
+func DB_FindDoctorsByFocus(focus string) (*[]dto.DoctorInfoModel, error) {
+	var doctors []dto.DoctorInfoModel
+
+	filter := bson.M{"focus": focus}
+	results, err := dbConfigs.DoctorInfoCollection.Find(context.Background(), filter)
+	if err != nil {
+		return nil, err
+	}
+	defer results.Close(context.Background())
+
+	for results.Next(context.Background()) {
+		var doctor dto.DoctorInfoModel
+		if err := results.Decode(&doctor); err != nil {
+			return nil, errors.New("error decoding doctors")
+		}
+		doctors = append(doctors, doctor)
+	}
+	return &doctors, nil
+}

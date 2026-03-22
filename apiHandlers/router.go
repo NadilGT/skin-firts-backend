@@ -31,6 +31,7 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 	// ========== DOCTOR ROUTES ==========
 	app.Post("/doctor", authMiddleware.ValidateToken, RequiresRole("admin"), api.CreateDoctor)
 	app.Get("/doctors", authMiddleware.ValidateToken, api.FindAllDoctors)
+	app.Get("/findAll/doctors/focus", api.GetDoctorsByFocus)
 	app.Get("/doctor-info", authMiddleware.ValidateToken, api.FindDoctorInfoByName)
 	app.Post("/doctor-info", authMiddleware.ValidateToken, RequiresRole("admin"), api.CreateDoctorInfo)
 

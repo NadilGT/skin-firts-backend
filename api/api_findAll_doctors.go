@@ -2,6 +2,7 @@ package api
 
 import (
 	"lawyerSL-Backend/dao"
+	"lawyerSL-Backend/dto"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -12,4 +13,29 @@ func FindAllDoctors(c *fiber.Ctx) error {
 		return err
 	}
 	return c.Status(fiber.StatusAccepted).JSON(returnValue)
+}
+
+func GetDoctorsByFocus(c *fiber.Ctx) error {
+	focus := c.Query("focus")
+	if focus == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Query parameter 'focus' is required",
+		})
+	}
+
+	doctors, err := dao.DB_FindDoctorsByFocus(focus)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to fetch doctors by focus",
+		})
+	}
+
+	if doctors == nil || len(*doctors) == 0 {
+		return c.Status(fiber.StatusOK).JSON(fiber.Map{
+			"message": "No doctors found with this focus",
+			"doctors": []dto.DoctorInfoModel{},
+		})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(doctors)
 }
