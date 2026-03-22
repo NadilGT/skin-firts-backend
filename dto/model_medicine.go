@@ -16,11 +16,7 @@ type MedicineModel struct {
 	Dosage               string             `json:"dosage" bson:"dosage"`
 	Form                 string             `json:"form" bson:"form"`
 	Strength             string             `json:"strength" bson:"strength"`
-	Price                float64            `json:"price" bson:"price"`
-	StockQuantity        int                `json:"stockQuantity" bson:"stockQuantity"`
 	MinStockLevel        int                `json:"minStockLevel" bson:"minStockLevel"`
-	ExpiryDate           string             `json:"expiryDate" bson:"expiryDate"`
-	BatchNumber          string             `json:"batchNumber" bson:"batchNumber"`
 	Description          string             `json:"description" bson:"description"`
 	SideEffects          []string           `json:"sideEffects,omitempty" bson:"sideEffects,omitempty"`
 	Contraindications    []string           `json:"contraindications,omitempty" bson:"contraindications,omitempty"`
@@ -28,6 +24,30 @@ type MedicineModel struct {
 	Status               string             `json:"status" bson:"status"`
 	CreatedAt            time.Time          `json:"createdAt" bson:"createdAt"`
 	UpdatedAt            time.Time          `json:"updatedAt" bson:"updatedAt"`
+}
+
+type MedicineBatchModel struct {
+	ID           primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
+	MedicineID   string             `json:"medicineId" bson:"medicineId"`
+	BatchNumber  string             `json:"batchNumber" bson:"batchNumber"`
+	Quantity     int                `json:"quantity" bson:"quantity"`
+	ExpiryDate   time.Time          `json:"expiryDate" bson:"expiryDate"`
+	BuyingPrice  float64            `json:"buyingPrice" bson:"buyingPrice"`
+	SellingPrice float64            `json:"sellingPrice" bson:"sellingPrice"`
+	Status       string             `json:"status" bson:"status"` // ACTIVE, OUT_OF_STOCK, EXPIRED
+	CreatedAt    time.Time          `json:"createdAt" bson:"createdAt"`
+}
+
+type BillItem struct {
+	MedicineID string             `json:"medicineId" bson:"medicineId"`
+	BatchID    string             `json:"batchId" bson:"batchId"`
+	Quantity   int                `json:"quantity" bson:"quantity"`
+	Price      float64            `json:"price" bson:"price"`
+}
+
+type DeductStockRequest struct {
+	MedicineID string `json:"medicineId"`
+	Quantity   int    `json:"quantity"`
 }
 
 type SearchMedicineQuery struct {

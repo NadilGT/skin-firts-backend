@@ -62,12 +62,20 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 	app.Delete("/doctor-schedule/time-slot", api.DeleteTimeSlotFromSchedule)
 
 	// ========== MEDICINE ROUTES ==========
-	app.Post("/medicines",authMiddleware.ValidateToken, api.CreateMedicine)
+	app.Post("/medicines", api.CreateMedicine)
 	app.Get("/medicines/search", api.SearchMedicines)
 	app.Get("/medicines/low-stock", api.GetLowStockMedicines)
 	app.Get("/medicines/:id", api.GetMedicineByID)
 	app.Put("/medicines/:id", api.UpdateMedicine)
 	app.Delete("/medicines/:id", api.DeleteMedicine)
+
+	// ========== MEDICINE BATCH ROUTES ==========
+	app.Post("/batches", api.CreateMedicineBatch)
+	app.Get("/batches/medicineId", api.GetBatchesByMedicineID)
+	app.Get("/batches/available/medicineId", api.GetAvailableBatchesFEFO)
+
+	// ========== BILLING ROUTES ==========
+	app.Post("/billing/deduct", api.DeductStockFEFO)
 
 	// ========== MEDICINE ORDER ROUTES ==========
 	app.Post("/medicine-orders", api.CreateMedicineOrder)
