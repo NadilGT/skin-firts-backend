@@ -73,10 +73,18 @@ func CreateAppointment(c *fiber.Ctx) error {
 		})
 	}
 
+	nextNum, err := dao.DB_GetNextAppointmentNumber(req.DoctorID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to generate appointment number",
+		})
+	}
+
 	// Build the model
 	appointment := dto.AppointmentModel{
-		AppointmentID:   req.AppointmentID,
-		PatientID:       req.PatientID,
+		AppointmentID:     req.AppointmentID,
+		AppointmentNumber: nextNum,
+		PatientID:         req.PatientID,
 		PatientName:     req.PatientName,
 		PatientEmail:    req.PatientEmail,
 		PatientPhone:    req.PatientPhone,
@@ -101,3 +109,4 @@ func CreateAppointment(c *fiber.Ctx) error {
 		"appointment": appointment,
 	})
 }
+

@@ -10,7 +10,7 @@ import (
 )
 
 func UpdateAppointmentStatus(c *fiber.Ctx) error {
-	idParam := c.Params("id")
+	idParam := c.Query("id")
 
 	appointmentID, err := primitive.ObjectIDFromHex(idParam)
 	if err != nil {

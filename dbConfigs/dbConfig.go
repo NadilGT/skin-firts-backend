@@ -18,6 +18,7 @@ var DoctorScheduleCollection *mongo.Collection
 var MedicineCollection *mongo.Collection
 var IdCounters *mongo.Collection
 var MedicineOrderCollection *mongo.Collection
+var FocusCollection *mongo.Collection
 
 func ConnectMongoDB(uri string) *mongo.Client {
 	client, err := mongo.NewClient(options.Client().ApplyURI(uri))
@@ -43,6 +44,7 @@ func ConnectMongoDB(uri string) *mongo.Client {
 	MedicineCollection = db.Collection("medicines")
 	IdCounters = db.Collection("id_counters")
 	MedicineOrderCollection = db.Collection("medicine_orders")
+	FocusCollection = db.Collection("focus_categories")
 
 	return client
 }

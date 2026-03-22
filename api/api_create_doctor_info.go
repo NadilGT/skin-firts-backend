@@ -22,6 +22,14 @@ func CreateDoctorInfo(c *fiber.Ctx) error {
 		})
 	}
 
+	// Verify focus mapping exists before binding it to the doctor
+	exists, err := dao.DB_CheckFocusExists(info.Focus)
+	if err != nil || !exists {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "A valid focus (FocusID or Name) must be attached and present inside focus configurations.",
+		})
+	}
+
 	if err := dao.DB_CreateDoctorInfo(info); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Failed to create doctor info",
