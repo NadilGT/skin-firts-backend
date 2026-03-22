@@ -36,10 +36,13 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 
 	// ========== APPOINTMENT ROUTES ==========
 	app.Get("/appointment/next-number/doctorId", api.GetNextAppointmentNumber)
+	app.Get("/appointments/running/doctorId", api.GetRunningAppointmentNumber)
+	app.Patch("/appointments/id/running", api.SetAppointmentRunning)
 	app.Post("/create/appointment", api.CreateAppointment)
 	app.Get("/findAll/appointments", authMiddleware.ValidateToken, api.GetAllAppointments)
-	app.Put("/appointments/:id/reschedule", api.RescheduleAppointment)
-	app.Patch("/appointments/:id/status", api.UpdateAppointmentStatus)
+	app.Get("/findAll/appointments/doctor", authMiddleware.ValidateToken, api.GetAppointmentsByDoctorID)
+	app.Put("/appointments/id/reschedule", api.RescheduleAppointment)
+	app.Patch("/appointments/id/status", api.UpdateAppointmentStatus)
 
 	// ========== DOCTOR SCHEDULE ROUTES ==========
 	app.Post("/doctor-schedule", api.CreateDoctorSchedule)

@@ -8,7 +8,7 @@ import (
 )
 
 func RescheduleAppointment(c *fiber.Ctx) error {
-	appointmentID := c.Params("id")
+	appointmentID := c.Query("id")
 
 	var req struct {
 		AppointmentDate string `json:"appointmentDate"`

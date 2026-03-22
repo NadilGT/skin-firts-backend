@@ -34,3 +34,30 @@ func DB_FindAllAppointments() ([]dto.AppointmentModel, error) {
 
 	return appointments, nil
 }
+
+func DB_FindAppointmentsByDoctorID(doctorID string) ([]dto.AppointmentModel, error) {
+	var appointments []dto.AppointmentModel
+
+	filter := bson.M{"doctorId": doctorID}
+	findOptions := options.Find().SetSort(bson.D{{"createdAt", -1}})
+
+	cursor, err := dbConfigs.AppointmentCollection.Find(context.Background(), filter, findOptions)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(context.Background())
+
+	for cursor.Next(context.Background()) {
+		var appointment dto.AppointmentModel
+		if err := cursor.Decode(&appointment); err != nil {
+			return nil, err
+		}
+		appointments = append(appointments, appointment)
+	}
+
+	if err := cursor.Err(); err != nil {
+		return nil, err
+	}
+
+	return appointments, nil
+}

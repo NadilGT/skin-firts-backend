@@ -41,5 +41,5 @@ type CreateAppointmentRequest struct {
 }
 
 type UpdateAppointmentStatusRequest struct {
-	Status string `json:"status" validate:"required,oneof=confirmed pending completed cancelled"`
+	Status string `json:"status" validate:"required,oneof=confirmed pending completed cancelled running"`
 }
