@@ -9,6 +9,7 @@ import (
 type AppointmentModel struct {
 	ID              primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
 	AppointmentID   string             `json:"appointmentId" bson:"appointmentId"`
+	AppointmentNumber int              `json:"appointmentNumber" bson:"appointmentNumber"`
 	PatientID       string             `json:"patientId" bson:"patientId"`
 	PatientName     string             `json:"patientName" bson:"patientName" validate:"required"`
 	PatientEmail    string             `json:"patientEmail" bson:"patientEmail" validate:"required,email"`
@@ -26,6 +27,7 @@ type AppointmentModel struct {
 
 type CreateAppointmentRequest struct {
 	AppointmentID   string `json:"appointment_id" bson:"appointment_id"`
+	AppointmentNumber int  `json:"appointment_number" bson:"appointment_number"`
 	PatientID       string `json:"patient_id" bson:"patient_id"`
 	PatientName     string `json:"patient_name" bson:"patient_name" validate:"required"`
 	PatientEmail    string `json:"patient_email" bson:"patient_email" validate:"required,email"`

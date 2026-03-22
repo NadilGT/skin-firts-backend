@@ -17,6 +17,17 @@ func DB_CreateAppointment(appointment dto.AppointmentModel) error {
 	return err
 }
 
+func DB_GetNextAppointmentNumber(doctorID string) (int, error) {
+	count, err := dbConfigs.AppointmentCollection.CountDocuments(
+		context.Background(),
+		bson.M{"doctorId": doctorID},
+	)
+	if err != nil {
+		return 0, err
+	}
+	return int(count) + 1, nil
+}
+
 func DB_IsTimeSlotAvailable(doctorID string, date time.Time, timeSlot string) (bool, error) {
 	startOfDay := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, date.Location())
 	endOfDay := startOfDay.Add(24 * time.Hour)
