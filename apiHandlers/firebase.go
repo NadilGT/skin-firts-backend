@@ -17,6 +17,11 @@ func InitFirebaseApp() (*firebase.App, error) {
 		return nil, fmt.Errorf("FIREBASE_CREDENTIALS not found in environment")
 	}
 
+	storageBucket := os.Getenv("FIREBASE_STORAGE_BUCKET")
+	if storageBucket == "" {
+		fmt.Println("WARNING: FIREBASE_STORAGE_BUCKET not found in environment. Image uploading will fail.")
+	}
+
 	// Validate JSON
 	var tmp map[string]interface{}
 	if err := json.Unmarshal([]byte(creds), &tmp); err != nil {
@@ -24,8 +29,11 @@ func InitFirebaseApp() (*firebase.App, error) {
 	}
 
 	// Create app
+	config := &firebase.Config{
+		StorageBucket: storageBucket,
+	}
 	opt := option.WithCredentialsJSON([]byte(creds))
-	app, err := firebase.NewApp(context.Background(), nil, opt)
+	app, err := firebase.NewApp(context.Background(), config, opt)
 	if err != nil {
 		return nil, fmt.Errorf("firebase init failure: %v", err)
 	}
