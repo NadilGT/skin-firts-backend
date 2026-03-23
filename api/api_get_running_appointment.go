@@ -14,7 +14,21 @@ func GetRunningAppointmentNumber(c *fiber.Ctx) error {
 		})
 	}
 
-	runningNum, err := dao.DB_GetRunningAppointment(doctorID)
+	dateStr := c.Query("date")
+	if dateStr == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Date is required",
+		})
+	}
+
+	date, err := parseFlexibleDate(dateStr)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid date format",
+		})
+	}
+
+	runningNum, err := dao.DB_GetRunningAppointment(doctorID, date)
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 			"error": "No running appointment found for this doctor",

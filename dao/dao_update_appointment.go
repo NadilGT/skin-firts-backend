@@ -24,12 +24,19 @@ func DB_UpdateAppointmentStatus(id primitive.ObjectID, status string) error {
 	return err
 }
 
-func DB_GetRunningAppointment(doctorID string) (int, error) {
+func DB_GetRunningAppointment(doctorID string, date time.Time) (int, error) {
 	collection := dbConfigs.AppointmentCollection
+
+	startOfDay := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, date.Location())
+	endOfDay := startOfDay.Add(24 * time.Hour)
 
 	filter := bson.M{
 		"doctorId": doctorID,
 		"status":   "running",
+		"appointmentDate": bson.M{
+			"$gte": startOfDay,
+			"$lt":  endOfDay,
+		},
 	}
 
 	var result map[string]interface{}
