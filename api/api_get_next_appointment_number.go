@@ -14,7 +14,21 @@ func GetNextAppointmentNumber(c *fiber.Ctx) error {
 		})
 	}
 
-	nextNum, err := dao.DB_GetNextAppointmentNumber(doctorID)
+	dateStr := c.Query("date")
+	if dateStr == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Date is required",
+		})
+	}
+
+	date, err := parseFlexibleDate(dateStr)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid date format",
+		})
+	}
+
+	nextNum, err := dao.DB_GetNextAppointmentNumber(doctorID, date)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Failed to get next appointment number",

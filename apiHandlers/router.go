@@ -14,6 +14,7 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 
 	// ========== ROLE MANAGEMENT ROUTES ==========
 	roleHandler := NewRoleAssignmentHandler(firebaseApp)
+	imageUploadHandler := api.NewImageUploadHandler(firebaseApp)
 
 	// 🚨 Call once to create first admin: /admin/initialize?email=you@example.com
 	app.Get("/admin/initialize", authMiddleware.ValidateToken, RequiresRole("admin"), roleHandler.InitializeSuperAdmin)
@@ -23,6 +24,9 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 	app.Get("/admin/user-roles", authMiddleware.ValidateToken, RequiresRole("admin"), roleHandler.GetUserRoles)
 	app.Get("/admin/list-users", authMiddleware.ValidateToken, RequiresRole("admin"), roleHandler.ListAllUsers)
 	app.Delete("/admin/remove-roles", authMiddleware.ValidateToken, RequiresRole("admin"), roleHandler.RemoveRoles)
+
+	// ========== GLOBAL ASSET ROUTES ==========
+	app.Post("/upload/image", authMiddleware.ValidateToken, imageUploadHandler.UploadImage)
 
 	// ========== FOCUS ROUTES ==========
 	app.Post("/focus", authMiddleware.ValidateToken, api.CreateFocus)
@@ -58,12 +62,20 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 	app.Delete("/doctor-schedule/time-slot", api.DeleteTimeSlotFromSchedule)
 
 	// ========== MEDICINE ROUTES ==========
-	app.Post("/medicines",authMiddleware.ValidateToken, api.CreateMedicine)
+	app.Post("/medicines", api.CreateMedicine)
 	app.Get("/medicines/search", api.SearchMedicines)
 	app.Get("/medicines/low-stock", api.GetLowStockMedicines)
 	app.Get("/medicines/:id", api.GetMedicineByID)
 	app.Put("/medicines/:id", api.UpdateMedicine)
 	app.Delete("/medicines/:id", api.DeleteMedicine)
+
+	// ========== MEDICINE BATCH ROUTES ==========
+	app.Post("/batches", api.CreateMedicineBatch)
+	app.Get("/batches/medicineId", api.GetBatchesByMedicineID)
+	app.Get("/batches/available/medicineId", api.GetAvailableBatchesFEFO)
+
+	// ========== BILLING ROUTES ==========
+	app.Post("/billing/deduct", api.DeductStockFEFO)
 
 	// ========== MEDICINE ORDER ROUTES ==========
 	app.Post("/medicine-orders", api.CreateMedicineOrder)

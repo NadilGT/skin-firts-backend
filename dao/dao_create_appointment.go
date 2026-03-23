@@ -17,10 +17,19 @@ func DB_CreateAppointment(appointment dto.AppointmentModel) error {
 	return err
 }
 
-func DB_GetNextAppointmentNumber(doctorID string) (int, error) {
+func DB_GetNextAppointmentNumber(doctorID string, date time.Time) (int, error) {
+	startOfDay := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, date.Location())
+	endOfDay := startOfDay.Add(24 * time.Hour)
+
 	count, err := dbConfigs.AppointmentCollection.CountDocuments(
 		context.Background(),
-		bson.M{"doctorId": doctorID},
+		bson.M{
+			"doctorId": doctorID,
+			"appointmentDate": bson.M{
+				"$gte": startOfDay,
+				"$lt":  endOfDay,
+			},
+		},
 	)
 	if err != nil {
 		return 0, err

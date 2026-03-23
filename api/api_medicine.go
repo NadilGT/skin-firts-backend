@@ -26,12 +26,6 @@ func CreateMedicine(c *fiber.Ctx) error {
 		})
 	}
 
-	if medicine.Price <= 0 {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Price must be greater than 0",
-		})
-	}
-
 	id, err := dao.GenerateId(context.Background(), "medicines", "MED")
 	if err != nil {
 		return utils.SendErrorResponse(c, fiber.StatusInternalServerError, err.Error())
@@ -181,5 +175,107 @@ func DebugMedicineRequest(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
 		"receivedBody": string(body),
 		"contentType":  c.Get("Content-Type"),
+	})
+}
+
+// ========== BATCH APIS ==========
+
+func CreateMedicineBatch(c *fiber.Ctx) error {
+	var batch dto.MedicineBatchModel
+	if err := c.BodyParser(&batch); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid request body",
+		})
+	}
+
+	batch.ID = primitive.NewObjectID()
+	batch.CreatedAt = time.Now()
+	
+	if batch.Status == "" {
+		batch.Status = "ACTIVE"
+	}
+
+	if err := dao.DB_CreateMedicineBatch(batch); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to create medicine batch: " + err.Error(),
+		})
+	}
+
+	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
+		"message": "Medicine batch created successfully",
+		"data":    batch,
+	})
+}
+
+func GetBatchesByMedicineID(c *fiber.Ctx) error {
+	id := c.Query("medicineId")
+	if id == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Missing medicineId format",
+		})
+	}
+
+	batches, err := dao.DB_GetBatchesByMedicineID(id)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to retrieve batches",
+		})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"data": batches,
+	})
+}
+
+func GetAvailableBatchesFEFO(c *fiber.Ctx) error {
+	id := c.Query("medicineId")
+	if id == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Missing medicineId format",
+		})
+	}
+
+	batches, err := dao.DB_GetAvailableBatchesFEFO(id)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to retrieve available batches",
+		})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"data": batches,
+	})
+}
+
+func DeductStockFEFO(c *fiber.Ctx) error {
+	var req dto.DeductStockRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid request body",
+		})
+	}
+
+	if req.Quantity <= 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Quantity must be greater than zero",
+		})
+	}
+
+	if req.MedicineID == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Missing medicine ID",
+		})
+	}
+
+	billItems, err := dao.DB_DeductStockFEFO(req.MedicineID, req.Quantity)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to deduct stock: " + err.Error(),
+		})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"message":   "Stock deducted successfully",
+		"billItems": billItems,
 	})
 }
