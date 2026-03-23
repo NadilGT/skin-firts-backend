@@ -12,6 +12,7 @@ import (
 )
 
 var dateFormats = []string{
+	time.RFC3339Nano,
 	time.RFC3339,       // 2025-11-18T10:30:00Z
 	"2006-01-02",       // 2025-11-18
 	"2006-01-02 15:04", // optional
