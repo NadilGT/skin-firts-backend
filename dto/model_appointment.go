@@ -26,18 +26,18 @@ type AppointmentModel struct {
 }
 
 type CreateAppointmentRequest struct {
-	AppointmentID   string `json:"appointment_id" bson:"appointment_id"`
-	AppointmentNumber int  `json:"appointment_number" bson:"appointment_number"`
-	PatientID       string `json:"patient_id" bson:"patient_id"`
-	PatientName     string `json:"patient_name" bson:"patient_name" validate:"required"`
-	PatientEmail    string `json:"patient_email" bson:"patient_email" validate:"required,email"`
-	PatientPhone    string `json:"patient_phone" bson:"patient_phone"`
-	DoctorID        string `json:"doctor_id" bson:"doctor_id" validate:"required"`
-	DoctorName      string `json:"doctor_name" bson:"doctor_name" validate:"required"`
-	DoctorSpecialty string `json:"doctor_specialty" bson:"doctor_specialty"`
-	AppointmentDate string `json:"appointment_date" bson:"appointment_date" validate:"required"` // Format: 2025-11-09
-	TimeSlot        string `json:"time_slot" bson:"time_slot" validate:"required"`               // Format: 10:00 AM
-	Notes           string `json:"notes,omitempty" bson:"notes,omitempty"`
+	AppointmentID     string `json:"appointmentId" bson:"appointmentId"`
+	AppointmentNumber int    `json:"appointmentNumber" bson:"appointmentNumber"`
+	PatientID         string `json:"patientId" bson:"patientId"`
+	PatientName       string `json:"patientName" bson:"patientName" validate:"required"`
+	PatientEmail      string `json:"patientEmail" bson:"patientEmail" validate:"required,email"`
+	PatientPhone      string `json:"patientPhone" bson:"patientPhone"`
+	DoctorID          string `json:"doctorId" bson:"doctorId" validate:"required"`
+	DoctorName        string `json:"doctorName" bson:"doctorName" validate:"required"`
+	DoctorSpecialty   string `json:"doctorSpecialty" bson:"doctorSpecialty"`
+	AppointmentDate   string `json:"appointmentDate" bson:"appointmentDate" validate:"required"` // Format: 2025-11-09
+	TimeSlot          string `json:"timeSlot" bson:"timeSlot" validate:"required"`               // Format: 10:00 AM
+	Notes             string `json:"notes,omitempty" bson:"notes,omitempty"`
 }
 
 type UpdateAppointmentStatusRequest struct {
