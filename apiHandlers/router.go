@@ -28,6 +28,21 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 	// ========== GLOBAL ASSET ROUTES ==========
 	app.Post("/upload/image", authMiddleware.ValidateToken, imageUploadHandler.UploadImage)
 
+	// ========== USER REGISTRATION ROUTES ==========
+	// Patient registers themselves after Firebase sign-up (public — no token needed here,
+	// but the FirebaseUID in the body ties the record to their auth identity).
+	app.Post("/register/patient", api.CreatePatientUser)
+	// Only an existing admin can onboard a new doctor or another admin.
+	app.Post("/register/doctor-user", api.CreateDoctorUserAccount)
+	app.Post("/register/admin", api.CreateAdminUser)
+
+	// ========== ROLE LOOKUP ROUTES ==========
+	// Portal: checks admin_users collection only — returns 404 if user is not an admin.
+	app.Get("/role/admin", api.FindAdminRole)
+	// Mobile app: checks patients + doctor_users collections.
+	app.Get("/role/mobile", api.FindMobileUserRole)
+
+
 	// ========== FOCUS ROUTES ==========
 	app.Post("/focus", authMiddleware.ValidateToken, api.CreateFocus)
 	app.Get("/findAll/focus", api.GetAllFocuses)
