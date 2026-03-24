@@ -36,6 +36,13 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 	app.Post("/register/doctor-user", api.CreateDoctorUserAccount)
 	app.Post("/register/admin", api.CreateAdminUser)
 
+	// ========== ROLE LOOKUP ROUTES ==========
+	// Portal: checks admin_users collection only — returns 404 if user is not an admin.
+	app.Get("/role/admin", api.FindAdminRole)
+	// Mobile app: checks patients + doctor_users collections.
+	app.Get("/role/mobile", api.FindMobileUserRole)
+
+
 	// ========== FOCUS ROUTES ==========
 	app.Post("/focus", authMiddleware.ValidateToken, api.CreateFocus)
 	app.Get("/findAll/focus", api.GetAllFocuses)
