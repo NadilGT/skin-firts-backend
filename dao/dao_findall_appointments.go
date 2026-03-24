@@ -9,55 +9,79 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-func DB_FindAllAppointments() ([]dto.AppointmentModel, error) {
-	var appointments []dto.AppointmentModel
+// DB_FindAllAppointments returns a paginated list of all appointments sorted by createdAt desc.
+// page is 1-indexed. Returns the slice, total document count, and any error.
+func DB_FindAllAppointments(page, limit int) ([]dto.AppointmentModel, int64, error) {
+	ctx := context.Background()
+	filter := bson.M{}
 
-	findOptions := options.Find().SetSort(bson.D{{"createdAt", -1}})
-
-	cursor, err := dbConfigs.AppointmentCollection.Find(context.Background(), bson.M{}, findOptions)
+	total, err := dbConfigs.AppointmentCollection.CountDocuments(ctx, filter)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	defer cursor.Close(context.Background())
 
-	for cursor.Next(context.Background()) {
-		var appointment dto.AppointmentModel
-		if err := cursor.Decode(&appointment); err != nil {
-			return nil, err
+	skip := int64((page - 1) * limit)
+	findOptions := options.Find().
+		SetSort(bson.D{{Key: "createdAt", Value: -1}}).
+		SetSkip(skip).
+		SetLimit(int64(limit))
+
+	cursor, err := dbConfigs.AppointmentCollection.Find(ctx, filter, findOptions)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer cursor.Close(ctx)
+
+	var appointments []dto.AppointmentModel
+	for cursor.Next(ctx) {
+		var a dto.AppointmentModel
+		if err := cursor.Decode(&a); err != nil {
+			return nil, 0, err
 		}
-		appointments = append(appointments, appointment)
+		appointments = append(appointments, a)
 	}
 
 	if err := cursor.Err(); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
-	return appointments, nil
+	return appointments, total, nil
 }
 
-func DB_FindAppointmentsByDoctorID(doctorID string) ([]dto.AppointmentModel, error) {
-	var appointments []dto.AppointmentModel
-
+// DB_FindAppointmentsByDoctorID returns a paginated list of appointments for a specific doctor.
+func DB_FindAppointmentsByDoctorID(doctorID string, page, limit int) ([]dto.AppointmentModel, int64, error) {
+	ctx := context.Background()
 	filter := bson.M{"doctorId": doctorID}
-	findOptions := options.Find().SetSort(bson.D{{"createdAt", -1}})
 
-	cursor, err := dbConfigs.AppointmentCollection.Find(context.Background(), filter, findOptions)
+	total, err := dbConfigs.AppointmentCollection.CountDocuments(ctx, filter)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	defer cursor.Close(context.Background())
 
-	for cursor.Next(context.Background()) {
-		var appointment dto.AppointmentModel
-		if err := cursor.Decode(&appointment); err != nil {
-			return nil, err
+	skip := int64((page - 1) * limit)
+	findOptions := options.Find().
+		SetSort(bson.D{{Key: "createdAt", Value: -1}}).
+		SetSkip(skip).
+		SetLimit(int64(limit))
+
+	cursor, err := dbConfigs.AppointmentCollection.Find(ctx, filter, findOptions)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer cursor.Close(ctx)
+
+	var appointments []dto.AppointmentModel
+	for cursor.Next(ctx) {
+		var a dto.AppointmentModel
+		if err := cursor.Decode(&a); err != nil {
+			return nil, 0, err
 		}
-		appointments = append(appointments, appointment)
+		appointments = append(appointments, a)
 	}
 
 	if err := cursor.Err(); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
-	return appointments, nil
+	return appointments, total, nil
 }
