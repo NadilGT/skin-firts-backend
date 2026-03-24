@@ -21,6 +21,11 @@ var IdCounters *mongo.Collection
 var MedicineOrderCollection *mongo.Collection
 var FocusCollection *mongo.Collection
 
+// Role-based user collections
+var PatientCollection *mongo.Collection
+var DoctorUserCollection *mongo.Collection
+var AdminUserCollection *mongo.Collection
+
 func ConnectMongoDB(uri string) *mongo.Client {
 	client, err := mongo.NewClient(options.Client().ApplyURI(uri))
 	if err != nil {
@@ -47,6 +52,11 @@ func ConnectMongoDB(uri string) *mongo.Client {
 	IdCounters = db.Collection("id_counters")
 	MedicineOrderCollection = db.Collection("medicine_orders")
 	FocusCollection = db.Collection("focus_categories")
+
+	// Role-based user collections
+	PatientCollection = db.Collection("patients")
+	DoctorUserCollection = db.Collection("doctor_users")
+	AdminUserCollection = db.Collection("admin_users")
 
 	return client
 }
