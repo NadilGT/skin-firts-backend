@@ -84,3 +84,35 @@ func GetAppointmentsByDoctorID(c *fiber.Ctx) error {
 		"totalPages": totalPages,
 	})
 }
+// GET /findAll/appointments/patient?patientId=oUTllPRCeeNiwEXKEhtTlSOZu4w1&page=1&limit=10
+func GetAppointmentsByPatientID(c *fiber.Ctx) error {
+	patientID := c.Query("patientId")
+	if patientID == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Patient ID is required",
+		})
+	}
+
+	page, limit := parsePagination(c)
+
+	appointments, total, err := dao.DB_FindAppointmentsByPatientID(patientID, page, limit)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to fetch appointments for this patient",
+		})
+	}
+
+	if appointments == nil {
+		appointments = []dto.AppointmentModel{}
+	}
+
+	totalPages := int(math.Ceil(float64(total) / float64(limit)))
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"data":       appointments,
+		"total":      total,
+		"page":       page,
+		"limit":      limit,
+		"totalPages": totalPages,
+	})
+}
