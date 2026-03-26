@@ -18,7 +18,6 @@ type AppointmentModel struct {
 	DoctorName      string             `json:"doctorName" bson:"doctorName" validate:"required"`
 	DoctorSpecialty string             `json:"doctorSpecialty" bson:"doctorSpecialty"`
 	AppointmentDate time.Time          `json:"appointmentDate" bson:"appointmentDate" validate:"required"`
-	TimeSlot        string             `json:"timeSlot" bson:"timeSlot" validate:"required"`
 	Status          string             `json:"status" bson:"status"` // confirmed, pending, completed, cancelled
 	Notes           string             `json:"notes,omitempty" bson:"notes,omitempty"`
 	CreatedAt       time.Time          `json:"createdAt" bson:"createdAt"`
@@ -36,7 +35,6 @@ type CreateAppointmentRequest struct {
 	DoctorName        string `json:"doctorName" bson:"doctorName" validate:"required"`
 	DoctorSpecialty   string `json:"doctorSpecialty" bson:"doctorSpecialty"`
 	AppointmentDate   string `json:"appointmentDate" bson:"appointmentDate" validate:"required"` // Format: 2025-11-09
-	TimeSlot          string `json:"timeSlot" bson:"timeSlot" validate:"required"`               // Format: 10:00 AM
 	Notes             string `json:"notes,omitempty" bson:"notes,omitempty"`
 }
 

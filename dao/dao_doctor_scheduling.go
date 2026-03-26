@@ -124,3 +124,63 @@ func DB_FindAllDoctorAvailabilities(doctorID string) ([]dto.DoctorAvailability, 
 	}
 	return availabilities, nil
 }
+
+func DB_CheckDoctorAvailabilityOnDate(doctorID string, date time.Time) (bool, string, error) {
+	dateStr := date.Format("2006-01-02")
+	dayOfWeek := int(date.Weekday())
+
+	// 1. Check specific availability override
+	var availability dto.DoctorAvailability
+	err := dbConfigs.DoctorAvailabilityCollection.FindOne(context.Background(), bson.M{
+		"doctorId": doctorID,
+		"date":     dateStr,
+	}).Decode(&availability)
+
+	if err == nil {
+		if !availability.IsAvailable {
+			return false, "Doctor is marked as unavailable on this date", nil
+		}
+		// If doctor is available via override, check max patients if specified
+		if availability.MaxPatients != nil {
+			startOfDay := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, date.Location())
+			endOfDay := startOfDay.Add(24 * time.Hour)
+			count, err := dbConfigs.AppointmentCollection.CountDocuments(context.Background(), bson.M{
+				"doctorId": doctorID,
+				"appointmentDate": bson.M{
+					"$gte": startOfDay,
+					"$lt":  endOfDay,
+				},
+				"status": bson.M{"$ne": "cancelled"},
+			})
+			if err == nil && int(count) >= *availability.MaxPatients {
+				return false, "Doctor has reached the maximum number of patients for this date", nil
+			}
+		}
+		return true, "", nil
+	}
+
+	// 2. No specific override, check weekly schedule
+	cursor, err := dbConfigs.DoctorWeeklyScheduleCollection.Find(context.Background(), bson.M{
+		"doctorId": doctorID,
+		"isActive": true,
+	})
+	if err != nil {
+		return false, "Failed to fetch doctor schedule", err
+	}
+	defer cursor.Close(context.Background())
+
+	var schedules []dto.DoctorWeeklySchedule
+	if err = cursor.All(context.Background(), &schedules); err != nil {
+		return false, "Failed to decode doctor schedule", err
+	}
+
+	for _, s := range schedules {
+		for _, day := range s.DaysOfWeek {
+			if day == dayOfWeek {
+				return true, "", nil
+			}
+		}
+	}
+
+	return false, "Doctor does not have a schedule for this day of the week", nil
+}
