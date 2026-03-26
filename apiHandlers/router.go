@@ -98,4 +98,17 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 	app.Get("/medicine-orders/:id", api.GetMedicineOrder)
 	app.Get("/medicine-orders", api.SearchMedicineOrders)
 	app.Patch("/medicine-orders/:id", api.UpdateMedicineOrderStatus)
+
+	// ========== NEW DOCTOR SCHEDULING ROUTES ==========
+	// Doctor Weekly Schedule
+	app.Post("/doctor-weekly-schedule", api.CreateDoctorWeeklySchedule)
+	app.Put("/doctor-weekly-schedule/id", api.UpdateDoctorWeeklySchedule)
+	app.Delete("/doctor-weekly-schedule/id", api.DeleteDoctorWeeklySchedule)
+	app.Get("/doctor-weekly-schedule", api.GetAllDoctorWeeklySchedules)
+
+	// Doctor Availability
+	app.Post("/doctor-availability", api.CreateDoctorAvailability)
+	app.Put("/doctor-availability/id", api.UpdateDoctorAvailability)
+	app.Delete("/doctor-availability/id", api.DeleteDoctorAvailability)
+	app.Get("/doctor-availability", api.GetAllDoctorAvailabilities)
 }
