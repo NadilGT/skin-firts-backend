@@ -23,3 +23,14 @@ type DoctorAvailability struct {
 	CreatedAt          time.Time `json:"createdAt" bson:"createdAt"`
 	UpdatedAt          time.Time `json:"updatedAt" bson:"updatedAt"`
 }
+
+type AvailableDate struct {
+	Date             string  `json:"date"`
+	DayOfWeek        int     `json:"dayOfWeek"`
+	DayName          string  `json:"dayName"`
+	DefaultStartTime *string `json:"defaultStartTime"`
+}
+
+type AvailableDateResponse struct {
+	AvailableDates []AvailableDate `json:"availableDates"`
+}

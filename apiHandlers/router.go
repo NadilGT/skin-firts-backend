@@ -105,6 +105,7 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 	app.Put("/doctor-weekly-schedule/id", api.UpdateDoctorWeeklySchedule)
 	app.Delete("/doctor-weekly-schedule/id", api.DeleteDoctorWeeklySchedule)
 	app.Get("/doctor-weekly-schedule", api.GetAllDoctorWeeklySchedules)
+	app.Get("/doctor-weekly-schedule/available-dates", api.GetDoctorAvailableDatesForWeek)
 
 	// Doctor Availability
 	app.Post("/doctor-availability", api.CreateDoctorAvailability)
