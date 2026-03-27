@@ -60,17 +60,17 @@ func CreateAppointment(c *fiber.Ctx) error {
 		})
 	}
 
-	// Check availability
-	available, err := dao.DB_IsTimeSlotAvailable(req.DoctorID, appointmentDate, req.TimeSlot)
+	// 1. Check doctor availability/schedule
+	isAvailable, reason, err := dao.DB_CheckDoctorAvailabilityOnDate(req.DoctorID, appointmentDate)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to check time slot availability",
+			"error": "Failed to check doctor availability",
+			"details": err.Error(),
 		})
 	}
-
-	if !available {
-		return c.Status(fiber.StatusConflict).JSON(fiber.Map{
-			"error": "This time slot is already booked",
+	if !isAvailable {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+			"error": reason,
 		})
 	}
 
@@ -93,7 +93,6 @@ func CreateAppointment(c *fiber.Ctx) error {
 		DoctorName:      req.DoctorName,
 		DoctorSpecialty: req.DoctorSpecialty,
 		AppointmentDate: appointmentDate,
-		TimeSlot:        req.TimeSlot,
 		Status:          "pending",
 		Notes:           req.Notes,
 	}
