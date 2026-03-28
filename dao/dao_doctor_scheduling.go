@@ -8,6 +8,7 @@ import (
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 // --- DoctorWeeklySchedule DAO ---
@@ -183,4 +184,20 @@ func DB_CheckDoctorAvailabilityOnDate(doctorID string, date time.Time) (bool, st
 	}
 
 	return false, "Doctor does not have a schedule for this day of the week", nil
+}
+
+func DB_FindDoctorAvailabilityByDate(doctorID string, date string) (*dto.DoctorAvailability, error) {
+	var availability dto.DoctorAvailability
+	err := dbConfigs.DoctorAvailabilityCollection.FindOne(context.Background(), bson.M{
+		"doctorId": doctorID,
+		"date":     date,
+	}).Decode(&availability)
+
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &availability, nil
 }

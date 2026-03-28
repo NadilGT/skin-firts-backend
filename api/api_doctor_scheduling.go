@@ -135,31 +135,114 @@ func GetDoctorAvailableDatesForWeek(c *fiber.Ctx) error {
 
 	// 3. Get current date and calculate the start of the week (Sunday)
 	now := time.Now()
+	todayDate := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	// Sunday is 0. now.Weekday() returns 0-6.
 	// To get Sunday of the current week:
 	startOfWeek := now.AddDate(0, 0, -int(now.Weekday()))
 
-	// 4. Loop through the next 7 days (Sunday → Saturday)
+	// 4. Loop through the next 14 days (Current Week + Next Week)
 	dayNames := []string{"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"}
 	var availableDates []dto.AvailableDate
 
-	for i := 0; i < 7; i++ {
+	for i := 0; i < 14; i++ {
 		date := startOfWeek.AddDate(0, 0, i)
+
+		// Skip dates before today
+		if date.Before(todayDate) {
+			continue
+		}
+
 		dayOfWeek := int(date.Weekday())
 
-		// 5. If dayOfWeek exists in schedule.daysOfWeek → include it
+		// 5. If dayOfWeek exists in schedule.daysOfWeek AND the doctor is actually available on that date
 		if startTime, ok := availableDays[dayOfWeek]; ok {
-			availableDates = append(availableDates, dto.AvailableDate{
-				Date:             date.Format("2006-01-02"),
-				DayOfWeek:        dayOfWeek,
-				DayName:          dayNames[dayOfWeek],
-				DefaultStartTime: startTime,
-			})
+			isAvailable, _, err := dao.DB_CheckDoctorAvailabilityOnDate(doctorID, date)
+			if err == nil && isAvailable {
+				availableDates = append(availableDates, dto.AvailableDate{
+					Date:             date.Format("2006-01-02"),
+					DayOfWeek:        dayOfWeek,
+					DayName:          dayNames[dayOfWeek],
+					DefaultStartTime: startTime,
+				})
+			}
+		} else {
+			// Check if there is an availability override that marks them as available
+			isAvailable, _, err := dao.DB_CheckDoctorAvailabilityOnDate(doctorID, date)
+			if err == nil && isAvailable {
+				// Try to get specific start time if override exists
+				var overrideStartTime *string
+				availability, _ := dao.DB_FindDoctorAvailabilityByDate(doctorID, date.Format("2006-01-02"))
+				if availability != nil {
+					overrideStartTime = availability.EstimatedStartTime
+				}
+
+				availableDates = append(availableDates, dto.AvailableDate{
+					Date:             date.Format("2006-01-02"),
+					DayOfWeek:        dayOfWeek,
+					DayName:          dayNames[dayOfWeek],
+					DefaultStartTime: overrideStartTime,
+				})
+			}
 		}
 	}
 
 	// 6. Return response
 	return c.Status(fiber.StatusOK).JSON(dto.AvailableDateResponse{
 		AvailableDates: availableDates,
+	})
+}
+
+func CheckDoctorAvailability(c *fiber.Ctx) error {
+	doctorID := c.Query("doctorId")
+	dateStr := c.Query("date")
+
+	if doctorID == "" || dateStr == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Doctor ID and date are required"})
+	}
+
+	date, err := time.Parse("2006-01-02", dateStr)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid date format. Use YYYY-MM-DD"})
+	}
+
+	// 1. Try to find a specific override record
+	availability, err := dao.DB_FindDoctorAvailabilityByDate(doctorID, dateStr)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch availability override"})
+	}
+
+	if availability != nil {
+		return c.Status(fiber.StatusOK).JSON(availability)
+	}
+
+	// 2. If no override, check weekly schedule and return a virtual record
+	isAvailable, message, err := dao.DB_CheckDoctorAvailabilityOnDate(doctorID, date)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to check weekly schedule"})
+	}
+
+	// Try to get defaultStartTime from weekly schedule if available
+	var defaultStartTime *string
+	dayOfWeek := int(date.Weekday())
+	schedules, err := dao.DB_FindAllDoctorWeeklySchedules(doctorID)
+	if err == nil {
+		for _, s := range schedules {
+			if s.IsActive {
+				for _, d := range s.DaysOfWeek {
+					if d == dayOfWeek {
+						defaultStartTime = s.DefaultStartTime
+						break
+					}
+				}
+			}
+		}
+	}
+
+	return c.Status(fiber.StatusOK).JSON(dto.DoctorAvailability{
+		DoctorID:           doctorID,
+		Date:               dateStr,
+		IsAvailable:        isAvailable,
+		EstimatedStartTime: defaultStartTime,
+		Notes:              &message,
 	})
 }
