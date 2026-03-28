@@ -112,4 +112,5 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 	app.Put("/doctor-availability/id", api.UpdateDoctorAvailability)
 	app.Delete("/doctor-availability/id", api.DeleteDoctorAvailability)
 	app.Get("/doctor-availability", api.GetAllDoctorAvailabilities)
+	app.Get("/doctor-availability/check", api.CheckDoctorAvailability)
 }

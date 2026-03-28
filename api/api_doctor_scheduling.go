@@ -163,3 +163,58 @@ func GetDoctorAvailableDatesForWeek(c *fiber.Ctx) error {
 		AvailableDates: availableDates,
 	})
 }
+
+func CheckDoctorAvailability(c *fiber.Ctx) error {
+	doctorID := c.Query("doctorId")
+	dateStr := c.Query("date")
+
+	if doctorID == "" || dateStr == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Doctor ID and date are required"})
+	}
+
+	date, err := time.Parse("2006-01-02", dateStr)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid date format. Use YYYY-MM-DD"})
+	}
+
+	// 1. Try to find a specific override record
+	availability, err := dao.DB_FindDoctorAvailabilityByDate(doctorID, dateStr)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch availability override"})
+	}
+
+	if availability != nil {
+		return c.Status(fiber.StatusOK).JSON(availability)
+	}
+
+	// 2. If no override, check weekly schedule and return a virtual record
+	isAvailable, message, err := dao.DB_CheckDoctorAvailabilityOnDate(doctorID, date)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to check weekly schedule"})
+	}
+
+	// Try to get defaultStartTime from weekly schedule if available
+	var defaultStartTime *string
+	dayOfWeek := int(date.Weekday())
+	schedules, err := dao.DB_FindAllDoctorWeeklySchedules(doctorID)
+	if err == nil {
+		for _, s := range schedules {
+			if s.IsActive {
+				for _, d := range s.DaysOfWeek {
+					if d == dayOfWeek {
+						defaultStartTime = s.DefaultStartTime
+						break
+					}
+				}
+			}
+		}
+	}
+
+	return c.Status(fiber.StatusOK).JSON(dto.DoctorAvailability{
+		DoctorID:           doctorID,
+		Date:               dateStr,
+		IsAvailable:        isAvailable,
+		EstimatedStartTime: defaultStartTime,
+		Notes:              &message,
+	})
+}

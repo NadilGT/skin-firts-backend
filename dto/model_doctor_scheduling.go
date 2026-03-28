@@ -34,3 +34,7 @@ type AvailableDate struct {
 type AvailableDateResponse struct {
 	AvailableDates []AvailableDate `json:"availableDates"`
 }
+type CheckAvailabilityResponse struct {
+	IsAvailable bool   `json:"isAvailable"`
+	Message     string `json:"message"`
+}
