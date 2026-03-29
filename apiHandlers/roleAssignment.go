@@ -230,15 +230,31 @@ func InitializeSuperAdmin(app *firebase.App) {
 		return
 	}
 
-	// Check if already has roles
+	// Check if already has super_admin role
+	hasSuperAdmin := false
 	if user.CustomClaims != nil {
-		if _, ok := user.CustomClaims["roles"]; ok {
-			log.Println("✅ Super admin already initialized:", email)
-			return
+		log.Printf("🔍 Current Claims for %s: %v\n", email, user.CustomClaims)
+		if rolesInterface, ok := user.CustomClaims["roles"]; ok {
+			if rolesList, ok := rolesInterface.([]interface{}); ok {
+				for _, r := range rolesList {
+					if roleStr, ok := r.(string); ok && roleStr == "super_admin" {
+						hasSuperAdmin = true
+						break
+					}
+				}
+			}
 		}
+	} else {
+		log.Printf("🔍 No Custom Claims found for %s\n", email)
 	}
 
-	// Assign admin role
+	if hasSuperAdmin {
+		log.Println("✅ Super admin already authorized:", email)
+		return
+	}
+
+	// Force assign super_admin role
+	log.Printf("⚠️ Adding super_admin role to: %s\n", email)
 	if err := client.SetCustomUserClaims(ctx, user.UID, map[string]interface{}{"roles": []string{"super_admin"}}); err != nil {
 		log.Println("❌ Failed to set super_admin role:", err)
 		return
