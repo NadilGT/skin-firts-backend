@@ -18,7 +18,7 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 	imageUploadHandler := api.NewImageUploadHandler(firebaseApp)
 
 	// Admin-only role management routes
-	app.Post("/admin/create-staff", RequiresRole("super_admin"), staffHandler.CreateStaffAccount)
+	app.Post("/admin/create-staff",authMiddleware.ValidateToken, RequiresRole("admin"), staffHandler.CreateStaffAccount)
 
 	// Admin-only role management routes
 	app.Post("/admin/assign-roles", authMiddleware.ValidateToken, RequiresRole("admin"), roleHandler.AssignRoles)
