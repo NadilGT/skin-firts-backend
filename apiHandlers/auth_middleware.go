@@ -58,6 +58,9 @@ func (a *AuthMiddleware) ValidateToken(c *fiber.Ctx) error {
 			}
 		}
 		c.Locals("roles", rolesStr)
+	} else {
+		// Log if roles are missing from token
+		// log.Printf("[DEBUG] No 'roles' claim found for user: %s", token.UID)
 	}
 
 	return c.Next()
@@ -66,23 +69,21 @@ func (a *AuthMiddleware) ValidateToken(c *fiber.Ctx) error {
 // Example Role Enforcement Middleware
 func RequiresRole(requiredRole string) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		// TEMP BYPASS: allow all requests to proceed to set up first admin
-		return c.Next()
+		rolesInterface := c.Locals("roles")
+		if rolesInterface == nil {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Roles not found in context"})
+		}
+		roles, ok := rolesInterface.([]string)
+		if !ok {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid roles format"})
+		}
 
-		// Original enforcement (restore after setup):
-		// rolesInterface := c.Locals("roles")
-		// if rolesInterface == nil {
-		// 	return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Roles not found in context"})
-		// }
-		// roles, ok := rolesInterface.([]string)
-		// if !ok {
-		// 	return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid roles format"})
-		// }
-		// for _, role := range roles {
-		// 	if role == requiredRole {
-		// 		return c.Next()
-		// 	}
-		// }
-		// return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Access denied. Required role: " + requiredRole})
+		for _, role := range roles {
+			// Super admin has access to everything
+			if role == "super_admin" || role == requiredRole {
+				return c.Next()
+			}
+		}
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Access denied. Required role: " + requiredRole})
 	}
 }

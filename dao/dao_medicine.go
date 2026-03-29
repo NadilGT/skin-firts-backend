@@ -210,67 +210,195 @@ func DB_GetAvailableBatchesFEFO(medicineID string) ([]dto.MedicineBatchModel, er
 	return batches, nil
 }
 
-func DB_UpdateBatchQuantity(batchID primitive.ObjectID, quantity int, status string) error {
-	filter := bson.M{"_id": batchID}
-	update := bson.M{
-		"$set": bson.M{
-			"quantity": quantity,
-			"status":   status,
-		},
+func DB_DeductFromBatchAtomic(batchID primitive.ObjectID, deductAmount int) (int, error) {
+	filter := bson.M{
+		"_id":      batchID,
+		"quantity": bson.M{"$gte": deductAmount},
 	}
-	_, err := dbConfigs.MedicineBatchCollection.UpdateOne(context.Background(), filter, update)
-	return err
+	update := bson.M{
+		"$inc": bson.M{"quantity": -deductAmount},
+	}
+
+	opts := options.FindOneAndUpdate().SetReturnDocument(options.After)
+	var updatedBatch dto.MedicineBatchModel
+	err := dbConfigs.MedicineBatchCollection.FindOneAndUpdate(context.Background(), filter, update, opts).Decode(&updatedBatch)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return 0, fmt.Errorf("insufficient stock or batch not found")
+		}
+		return 0, err
+	}
+
+	// If quantity is now 0, update status
+	if updatedBatch.Quantity == 0 {
+		_, _ = dbConfigs.MedicineBatchCollection.UpdateOne(
+			context.Background(),
+			bson.M{"_id": batchID},
+			bson.M{"$set": bson.M{"status": "OUT_OF_STOCK"}},
+		)
+	}
+
+	return updatedBatch.Quantity, nil
 }
 
 func DB_DeductStockFEFO(medicineID string, requiredQty int) ([]dto.BillItem, error) {
-	batches, err := DB_GetAvailableBatchesFEFO(medicineID)
-	if err != nil {
-		return nil, err
-	}
-
-	// Calculate total available
-	totalAvailable := 0
-	for _, b := range batches {
-		totalAvailable += b.Quantity
-	}
-
-	if totalAvailable < requiredQty {
-		return nil, fmt.Errorf("insufficient stock: required %d, available %d", requiredQty, totalAvailable)
-	}
-
 	var billItems []dto.BillItem
 	remainingToDeduct := requiredQty
 
-	for _, b := range batches {
-		if remainingToDeduct <= 0 {
-			break
-		}
-
-		deductFromBatch := b.Quantity
-		if remainingToDeduct < b.Quantity {
-			deductFromBatch = remainingToDeduct
-		}
-
-		newQty := b.Quantity - deductFromBatch
-		status := b.Status
-		if newQty == 0 {
-			status = "OUT_OF_STOCK"
-		}
-
-		err = DB_UpdateBatchQuantity(b.ID, newQty, status)
+	// Use a loop to handle potential concurrency issues by re-fetching if an atomic update fails
+	for remainingToDeduct > 0 {
+		batches, err := DB_GetAvailableBatchesFEFO(medicineID)
 		if err != nil {
 			return nil, err
 		}
 
-		billItems = append(billItems, dto.BillItem{
-			MedicineID: b.MedicineID,
-			BatchID:    b.ID.Hex(),
-			Quantity:   deductFromBatch,
-			Price:      b.SellingPrice,
-		})
+		if len(batches) == 0 {
+			if len(billItems) > 0 {
+				return billItems, fmt.Errorf("insufficient stock: partially deducted %d, but no more available batches for remaining %d", requiredQty-remainingToDeduct, remainingToDeduct)
+			}
+			return nil, fmt.Errorf("insufficient stock: no available batches found")
+		}
 
-		remainingToDeduct -= deductFromBatch
+		// Calculate total available in current snapshot
+		totalAvailable := 0
+		for _, b := range batches {
+			totalAvailable += b.Quantity
+		}
+
+		if totalAvailable < remainingToDeduct {
+			if len(billItems) > 0 {
+				return billItems, fmt.Errorf("insufficient stock: partially deducted, need %d more, but only %d available", remainingToDeduct, totalAvailable)
+			}
+			return nil, fmt.Errorf("insufficient stock: required %d, available %d", remainingToDeduct, totalAvailable)
+		}
+
+		deductedInThisPass := false
+		for _, b := range batches {
+			if remainingToDeduct <= 0 {
+				break
+			}
+
+			deductFromBatch := b.Quantity
+			if remainingToDeduct < b.Quantity {
+				deductFromBatch = remainingToDeduct
+			}
+
+			// Atomic deduction
+			_, err := DB_DeductFromBatchAtomic(b.ID, deductFromBatch)
+			if err != nil {
+				// If this batch failed (e.g., someone else took stock), move to the next batch
+				continue
+			}
+
+			billItems = append(billItems, dto.BillItem{
+				MedicineID: b.MedicineID,
+				BatchID:    b.ID.Hex(),
+				Quantity:   deductFromBatch,
+				Price:      b.SellingPrice,
+			})
+
+			remainingToDeduct -= deductFromBatch
+			deductedInThisPass = true
+
+			// If we fully satisfied the request, we can break
+			if remainingToDeduct <= 0 {
+				break
+			}
+		}
+
+		// If we went through all batches but couldn't deduct anything (all failed due to contention),
+		// we should avoid an infinite loop. We'll re-fetch anyway in the next outer loop iteration.
+		if !deductedInThisPass && remainingToDeduct > 0 {
+			time.Sleep(10 * time.Millisecond) // Tiny backoff
+		}
 	}
 
 	return billItems, nil
+}
+func DB_CheckStockAndCalculatePrice(medicineID string, requiredQty int) ([]dto.BillItem, error) {
+batches, err := DB_GetAvailableBatchesFEFO(medicineID)
+if err != nil {
+return nil, err
+}
+
+totalAvailable := 0
+for _, b := range batches {
+totalAvailable += b.Quantity
+}
+
+if totalAvailable < requiredQty {
+return nil, fmt.Errorf("insufficient stock: required %d, available %d", requiredQty, totalAvailable)
+}
+
+var billItems []dto.BillItem
+remainingToDeduct := requiredQty
+
+for _, b := range batches {
+if remainingToDeduct <= 0 {
+break
+}
+
+deductFromBatch := b.Quantity
+if remainingToDeduct < b.Quantity {
+deductFromBatch = remainingToDeduct
+}
+
+billItems = append(billItems, dto.BillItem{
+MedicineID: b.MedicineID,
+BatchID:    b.ID.Hex(),
+Quantity:   deductFromBatch,
+Price:      b.SellingPrice,
+})
+
+remainingToDeduct -= deductFromBatch
+}
+
+return billItems, nil
+}
+
+func DB_CreateBill(bill dto.BillModel) error {
+	_, err := dbConfigs.BillCollection.InsertOne(context.Background(), bill)
+	return err
+}
+
+func DB_GetBillByBillId(billId string) (*dto.BillModel, error) {
+	var bill dto.BillModel
+	err := dbConfigs.BillCollection.FindOne(context.Background(), bson.M{"billId": billId}).Decode(&bill)
+	if err != nil {
+	return nil, err
+	}
+	return &bill, nil
+}
+
+func DB_UpdateBillStatus(billId string, status string) error {
+	filter := bson.M{"billId": billId}
+	update := bson.M{
+	"$set": bson.M{
+	"status":    status,
+	"updatedAt": time.Now(),
+	},
+}
+	_, err := dbConfigs.BillCollection.UpdateOne(context.Background(), filter, update)
+	return err
+}
+
+func DB_RevertStockDeduction(billItems []dto.BillItem) error {
+	for _, item := range billItems {
+	batchObjID, err := primitive.ObjectIDFromHex(item.BatchID)
+	if err != nil {
+	return err
+}
+
+	filter := bson.M{"_id": batchObjID}
+	update := bson.M{
+	"$inc": bson.M{"quantity": item.Quantity},
+	"$set": bson.M{"status": "ACTIVE"}, // Ensure status is active in case it was out of stock
+}
+
+	_, err = dbConfigs.MedicineBatchCollection.UpdateOne(context.Background(), filter, update)
+		if err != nil {
+		return err
+		}
+	}
+	return nil
 }

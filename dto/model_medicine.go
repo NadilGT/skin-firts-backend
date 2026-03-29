@@ -28,8 +28,8 @@ type MedicineModel struct {
 
 type MedicineBatchModel struct {
 	ID           primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
+	MedicineBatchId string             `json:"MedicineBatchId" bson:"medicinebatchid"`
 	MedicineID   string             `json:"medicineId" bson:"medicineId"`
-	BatchNumber  string             `json:"batchNumber" bson:"batchNumber"`
 	Quantity     int                `json:"quantity" bson:"quantity"`
 	ExpiryDate   time.Time          `json:"expiryDate" bson:"expiryDate"`
 	BuyingPrice  float64            `json:"buyingPrice" bson:"buyingPrice"`
@@ -57,4 +57,25 @@ type SearchMedicineQuery struct {
 	Status     string `json:"status" query:"status"`
 	Page       int    `json:"page" query:"page"`
 	Limit      int    `json:"limit" query:"limit"`
+}
+type CreateBillRequest struct {
+	Items []DeductStockRequest `json:"items"`
+}
+
+type BillResponse struct {
+	Items              []BillItem `json:"items"`
+	TotalMedicinePrice float64    `json:"totalMedicinePrice"`
+	AdditionalCharges  float64    `json:"additionalCharges"`
+	GrandTotal         float64    `json:"grandTotal"`
+}
+type BillModel struct {
+	ID                 primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
+	BillId             string             `json:"billId" bson:"billId"`
+	Items              []BillItem         `json:"items" bson:"items"`
+	TotalMedicinePrice float64            `json:"totalMedicinePrice" bson:"totalMedicinePrice"`
+	AdditionalCharges  float64            `json:"additionalCharges" bson:"additionalCharges"`
+	GrandTotal         float64            `json:"grandTotal" bson:"grandTotal"`
+	Status             string             `json:"status" bson:"status"` // PENDING, CONFIRMED, FAILED
+	CreatedAt          time.Time          `json:"createdAt" bson:"createdAt"`
+	UpdatedAt          time.Time          `json:"updatedAt" bson:"updatedAt"`
 }

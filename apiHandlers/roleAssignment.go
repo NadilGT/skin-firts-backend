@@ -4,6 +4,7 @@ package apiHandlers
 import (
 	"context"
 	"log"
+	"os"
 
 	firebase "firebase.google.com/go/v4"
 	"github.com/gofiber/fiber/v2"
@@ -207,32 +208,57 @@ func (h *RoleAssignmentHandler) RemoveRoles(c *fiber.Ctx) error {
 }
 
 // InitializeSuperAdmin - One-time setup to create the first admin
-// Call this endpoint ONCE when you first set up your system
-func (h *RoleAssignmentHandler) InitializeSuperAdmin(c *fiber.Ctx) error {
+// Call this function when the server starts
+func InitializeSuperAdmin(app *firebase.App) {
 	ctx := context.Background()
-	client, err := h.firebaseApp.Auth(ctx)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to init Firebase"})
+
+	email := os.Getenv("SUPER_ADMIN_EMAIL")
+	if email == "" {
+		log.Println("No super admin email configured")
+		return
 	}
 
-	email := c.Query("email")
-	if email == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Email is required"})
+	client, err := app.Auth(ctx)
+	if err != nil {
+		log.Println("❌ Failed to initialize Firebase Auth for Super Admin check:", err)
+		return
 	}
 
 	user, err := client.GetUserByEmail(ctx, email)
 	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "User not found"})
+		log.Printf("⚠️ User not found for super admin (%s). Please sign up first.\n", email)
+		return
 	}
 
-	if err := client.SetCustomUserClaims(ctx, user.UID, map[string]interface{}{"roles": []string{"admin"}}); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to set admin role"})
+	// Check if already has super_admin role
+	hasSuperAdmin := false
+	if user.CustomClaims != nil {
+		log.Printf("🔍 Current Claims for %s: %v\n", email, user.CustomClaims)
+		if rolesInterface, ok := user.CustomClaims["roles"]; ok {
+			if rolesList, ok := rolesInterface.([]interface{}); ok {
+				for _, r := range rolesList {
+					if roleStr, ok := r.(string); ok && roleStr == "super_admin" {
+						hasSuperAdmin = true
+						break
+					}
+				}
+			}
+		}
+	} else {
+		log.Printf("🔍 No Custom Claims found for %s\n", email)
 	}
 
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{
-		"message": "Super admin initialized",
-		"email":   email,
-		"roles":   []string{"admin"},
-		"note":    "User must re-login to receive new token with roles",
-	})
+	if hasSuperAdmin {
+		log.Println("✅ Super admin already authorized:", email)
+		return
+	}
+
+	// Force assign super_admin role
+	log.Printf("⚠️ Adding super_admin role to: %s\n", email)
+	if err := client.SetCustomUserClaims(ctx, user.UID, map[string]interface{}{"roles": []string{"super_admin"}}); err != nil {
+		log.Println("❌ Failed to set super_admin role:", err)
+		return
+	}
+
+	log.Println("🚀 Super admin initialized successfully:", email)
 }

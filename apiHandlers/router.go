@@ -14,10 +14,11 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 
 	// ========== ROLE MANAGEMENT ROUTES ==========
 	roleHandler := NewRoleAssignmentHandler(firebaseApp)
+	staffHandler := api.NewStaffHandler(firebaseApp)
 	imageUploadHandler := api.NewImageUploadHandler(firebaseApp)
 
-	// 🚨 Call once to create first admin: /admin/initialize?email=you@example.com
-	app.Get("/admin/initialize", authMiddleware.ValidateToken, RequiresRole("admin"), roleHandler.InitializeSuperAdmin)
+	// Admin-only role management routes
+	app.Post("/admin/create-staff",authMiddleware.ValidateToken, RequiresRole("admin"), staffHandler.CreateStaffAccount)
 
 	// Admin-only role management routes
 	app.Post("/admin/assign-roles", authMiddleware.ValidateToken, RequiresRole("admin"), roleHandler.AssignRoles)
@@ -92,6 +93,8 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 
 	// ========== BILLING ROUTES ==========
 	app.Post("/billing/deduct", api.DeductStockFEFO)
+	app.Post("/billing/create-bill", api.CreateBill)
+	app.Post("/billing/confirm/billId", api.ConfirmBill)
 
 	// ========== MEDICINE ORDER ROUTES ==========
 	app.Post("/medicine-orders", api.CreateMedicineOrder)

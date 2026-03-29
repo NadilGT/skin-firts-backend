@@ -32,6 +32,8 @@ func main() {
 		log.Fatalf("❌ Failed to initialize Firebase: %v", err)
 	}
 
+	apiHandlers.InitializeSuperAdmin(firebaseApp)
+
 	authConfig := dto.AuthConfig{
 		FirebaseProjectID: os.Getenv("FIREBASE_PROJECT_ID"),
 	}

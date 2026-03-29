@@ -22,11 +22,13 @@ var MedicineOrderCollection *mongo.Collection
 var FocusCollection *mongo.Collection
 var DoctorWeeklyScheduleCollection *mongo.Collection
 var DoctorAvailabilityCollection *mongo.Collection
+var BillCollection *mongo.Collection
 
 // Role-based user collections
 var PatientCollection *mongo.Collection
 var DoctorUserCollection *mongo.Collection
 var AdminUserCollection *mongo.Collection
+var StaffUserCollection *mongo.Collection
 
 func ConnectMongoDB(uri string) *mongo.Client {
 	client, err := mongo.NewClient(options.Client().ApplyURI(uri))
@@ -34,7 +36,8 @@ func ConnectMongoDB(uri string) *mongo.Client {
 		log.Fatal(err)
 	}
 
-	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 	if err := client.Connect(ctx); err != nil {
 		log.Fatal("Error connecting to MongoDB:", err)
 	}
@@ -56,11 +59,13 @@ func ConnectMongoDB(uri string) *mongo.Client {
 	FocusCollection = db.Collection("focus_categories")
 	DoctorWeeklyScheduleCollection = db.Collection("doctor_weekly_schedules")
 	DoctorAvailabilityCollection = db.Collection("doctor_availabilities")
+	BillCollection = db.Collection("bills")
 
 	// Role-based user collections
 	PatientCollection = db.Collection("patients")
 	DoctorUserCollection = db.Collection("doctor_users")
 	AdminUserCollection = db.Collection("admin_users")
+	StaffUserCollection = db.Collection("staff_users")
 
 	return client
 }
