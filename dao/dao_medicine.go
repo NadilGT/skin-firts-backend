@@ -315,3 +315,90 @@ func DB_DeductStockFEFO(medicineID string, requiredQty int) ([]dto.BillItem, err
 
 	return billItems, nil
 }
+func DB_CheckStockAndCalculatePrice(medicineID string, requiredQty int) ([]dto.BillItem, error) {
+batches, err := DB_GetAvailableBatchesFEFO(medicineID)
+if err != nil {
+return nil, err
+}
+
+totalAvailable := 0
+for _, b := range batches {
+totalAvailable += b.Quantity
+}
+
+if totalAvailable < requiredQty {
+return nil, fmt.Errorf("insufficient stock: required %d, available %d", requiredQty, totalAvailable)
+}
+
+var billItems []dto.BillItem
+remainingToDeduct := requiredQty
+
+for _, b := range batches {
+if remainingToDeduct <= 0 {
+break
+}
+
+deductFromBatch := b.Quantity
+if remainingToDeduct < b.Quantity {
+deductFromBatch = remainingToDeduct
+}
+
+billItems = append(billItems, dto.BillItem{
+MedicineID: b.MedicineID,
+BatchID:    b.ID.Hex(),
+Quantity:   deductFromBatch,
+Price:      b.SellingPrice,
+})
+
+remainingToDeduct -= deductFromBatch
+}
+
+return billItems, nil
+}
+
+func DB_CreateBill(bill dto.BillModel) error {
+	_, err := dbConfigs.BillCollection.InsertOne(context.Background(), bill)
+	return err
+}
+
+func DB_GetBillByBillId(billId string) (*dto.BillModel, error) {
+	var bill dto.BillModel
+	err := dbConfigs.BillCollection.FindOne(context.Background(), bson.M{"billId": billId}).Decode(&bill)
+	if err != nil {
+	return nil, err
+	}
+	return &bill, nil
+}
+
+func DB_UpdateBillStatus(billId string, status string) error {
+	filter := bson.M{"billId": billId}
+	update := bson.M{
+	"$set": bson.M{
+	"status":    status,
+	"updatedAt": time.Now(),
+	},
+}
+	_, err := dbConfigs.BillCollection.UpdateOne(context.Background(), filter, update)
+	return err
+}
+
+func DB_RevertStockDeduction(billItems []dto.BillItem) error {
+	for _, item := range billItems {
+	batchObjID, err := primitive.ObjectIDFromHex(item.BatchID)
+	if err != nil {
+	return err
+}
+
+	filter := bson.M{"_id": batchObjID}
+	update := bson.M{
+	"$inc": bson.M{"quantity": item.Quantity},
+	"$set": bson.M{"status": "ACTIVE"}, // Ensure status is active in case it was out of stock
+}
+
+	_, err = dbConfigs.MedicineBatchCollection.UpdateOne(context.Background(), filter, update)
+		if err != nil {
+		return err
+		}
+	}
+	return nil
+}

@@ -92,6 +92,8 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 
 	// ========== BILLING ROUTES ==========
 	app.Post("/billing/deduct", api.DeductStockFEFO)
+	app.Post("/billing/create-bill", api.CreateBill)
+	app.Post("/billing/confirm/billId", api.ConfirmBill)
 
 	// ========== MEDICINE ORDER ROUTES ==========
 	app.Post("/medicine-orders", api.CreateMedicineOrder)
