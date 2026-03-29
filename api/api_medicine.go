@@ -188,9 +188,16 @@ func CreateMedicineBatch(c *fiber.Ctx) error {
 		})
 	}
 
+	// Generate MedicineBatchId
+	id, err := dao.GenerateId(context.Background(), "medicine_batches", "BAT")
+	if err != nil {
+		return utils.SendErrorResponse(c, fiber.StatusInternalServerError, err.Error())
+	}
+	batch.MedicineBatchId = id
+
 	batch.ID = primitive.NewObjectID()
 	batch.CreatedAt = time.Now()
-	
+
 	if batch.Status == "" {
 		batch.Status = "ACTIVE"
 	}

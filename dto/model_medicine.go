@@ -28,6 +28,7 @@ type MedicineModel struct {
 
 type MedicineBatchModel struct {
 	ID           primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
+	MedicineBatchId string             `json:"MedicineBatchId" bson:"medicinebatchid"`
 	MedicineID   string             `json:"medicineId" bson:"medicineId"`
 	BatchNumber  string             `json:"batchNumber" bson:"batchNumber"`
 	Quantity     int                `json:"quantity" bson:"quantity"`
