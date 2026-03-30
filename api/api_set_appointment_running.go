@@ -5,20 +5,18 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
-	"go.mongodb.org/mongo-driver/bson/primitive"
+
 )
 
 func SetAppointmentRunning(c *fiber.Ctx) error {
-	idParam := c.Query("id")
-
-	appointmentID, err := primitive.ObjectIDFromHex(idParam)
-	if err != nil {
+	idParam := c.Query("appointmentId")
+	if idParam == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Invalid appointment ID",
+			"error": "Appointment ID is required",
 		})
 	}
 
-	if err := dao.DB_UpdateAppointmentStatus(appointmentID, "running"); err != nil {
+	if err := dao.DB_UpdateAppointmentStatus(idParam, "running"); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Failed to set appointment status to running",
 		})

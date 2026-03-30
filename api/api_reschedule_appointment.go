@@ -8,7 +8,12 @@ import (
 )
 
 func RescheduleAppointment(c *fiber.Ctx) error {
-	appointmentID := c.Query("id")
+	appointmentID := c.Query("appointmentId")
+	if appointmentID == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Appointment ID is required",
+		})
+	}
 
 	var req struct {
 		AppointmentDate string `json:"appointmentDate"`
