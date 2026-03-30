@@ -5,14 +5,14 @@ import (
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
+
 	"lawyerSL-Backend/dbConfigs"
 )
 
-func DB_UpdateAppointmentStatus(id primitive.ObjectID, status string) error {
+func DB_UpdateAppointmentStatus(id string, status string) error {
 	collection := dbConfigs.AppointmentCollection
 
-	filter := bson.M{"_id": id}
+	filter := bson.M{"appointmentId": id}
 	update := bson.M{
 		"$set": bson.M{
 			"status":    status,
