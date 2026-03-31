@@ -22,30 +22,33 @@ func DB_CreateDoctorWeeklySchedule(schedule dto.DoctorWeeklySchedule) (string, e
 }
 
 func DB_UpdateDoctorWeeklySchedule(id string, schedule dto.DoctorWeeklySchedule) error {
-	objID, err := primitive.ObjectIDFromHex(id)
-	if err != nil {
-		return err
-	}
-	filter := bson.M{"_id": objID}
+	filter := bson.M{"doctorId": id}
 	update := bson.M{
 		"$set": bson.M{
-			"doctorId":         schedule.DoctorID,
 			"daysOfWeek":       schedule.DaysOfWeek,
 			"defaultStartTime": schedule.DefaultStartTime,
 			"isActive":         schedule.IsActive,
 		},
 	}
-	_, err = dbConfigs.DoctorWeeklyScheduleCollection.UpdateOne(context.Background(), filter, update)
-	return err
-}
-
-func DB_DeleteDoctorWeeklySchedule(id string) error {
-	objID, err := primitive.ObjectIDFromHex(id)
+	result, err := dbConfigs.DoctorWeeklyScheduleCollection.UpdateOne(context.Background(), filter, update)
 	if err != nil {
 		return err
 	}
-	_, err = dbConfigs.DoctorWeeklyScheduleCollection.DeleteOne(context.Background(), bson.M{"_id": objID})
-	return err
+	if result.MatchedCount == 0 {
+		return mongo.ErrNoDocuments
+	}
+	return nil
+}
+
+func DB_DeleteDoctorWeeklySchedule(id string) error {
+	result, err := dbConfigs.DoctorWeeklyScheduleCollection.DeleteOne(context.Background(), bson.M{"doctorId": id})
+	if err != nil {
+		return err
+	}
+	if result.DeletedCount == 0 {
+		return mongo.ErrNoDocuments
+	}
+	return nil
 }
 
 func DB_FindAllDoctorWeeklySchedules(doctorID string) ([]dto.DoctorWeeklySchedule, error) {
@@ -79,11 +82,7 @@ func DB_CreateDoctorAvailability(availability dto.DoctorAvailability) (string, e
 }
 
 func DB_UpdateDoctorAvailability(id string, availability dto.DoctorAvailability) error {
-	objID, err := primitive.ObjectIDFromHex(id)
-	if err != nil {
-		return err
-	}
-	filter := bson.M{"_id": objID}
+	filter := bson.M{"doctorAvailabilityId": id}
 	update := bson.M{
 		"$set": bson.M{
 			"doctorId":           availability.DoctorID,
@@ -95,17 +94,25 @@ func DB_UpdateDoctorAvailability(id string, availability dto.DoctorAvailability)
 			"updatedAt":          time.Now(),
 		},
 	}
-	_, err = dbConfigs.DoctorAvailabilityCollection.UpdateOne(context.Background(), filter, update)
-	return err
-}
-
-func DB_DeleteDoctorAvailability(id string) error {
-	objID, err := primitive.ObjectIDFromHex(id)
+	result, err := dbConfigs.DoctorAvailabilityCollection.UpdateOne(context.Background(), filter, update)
 	if err != nil {
 		return err
 	}
-	_, err = dbConfigs.DoctorAvailabilityCollection.DeleteOne(context.Background(), bson.M{"_id": objID})
-	return err
+	if result.MatchedCount == 0 {
+		return mongo.ErrNoDocuments
+	}
+	return nil
+}
+
+func DB_DeleteDoctorAvailability(id string) error {
+	result, err := dbConfigs.DoctorAvailabilityCollection.DeleteOne(context.Background(), bson.M{"doctorAvailabilityId": id})
+	if err != nil {
+		return err
+	}
+	if result.DeletedCount == 0 {
+		return mongo.ErrNoDocuments
+	}
+	return nil
 }
 
 func DB_FindAllDoctorAvailabilities(doctorID string) ([]dto.DoctorAvailability, error) {

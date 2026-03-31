@@ -7,9 +7,8 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"go.mongodb.org/mongo-driver/mongo"
 )
-
-// --- DoctorWeeklySchedule Handlers ---
 
 func CreateDoctorWeeklySchedule(c *fiber.Ctx) error {
 	var schedule dto.DoctorWeeklySchedule
@@ -32,20 +31,26 @@ func CreateDoctorWeeklySchedule(c *fiber.Ctx) error {
 }
 
 func UpdateDoctorWeeklySchedule(c *fiber.Ctx) error {
-	id := c.Query("id")
+	id := c.Query("doctorId")
 	var schedule dto.DoctorWeeklySchedule
 	if err := c.BodyParser(&schedule); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
 	}
 	if err := dao.DB_UpdateDoctorWeeklySchedule(id, schedule); err != nil {
+		if err == mongo.ErrNoDocuments {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Schedule not found for this doctor"})
+		}
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update schedule"})
 	}
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Schedule updated successfully"})
 }
 
 func DeleteDoctorWeeklySchedule(c *fiber.Ctx) error {
-	id := c.Query("id")
+	id := c.Query("doctorId")
 	if err := dao.DB_DeleteDoctorWeeklySchedule(id); err != nil {
+		if err == mongo.ErrNoDocuments {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Schedule not found for this doctor"})
+		}
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to delete schedule"})
 	}
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Schedule deleted successfully"})
@@ -83,20 +88,26 @@ func CreateDoctorAvailability(c *fiber.Ctx) error {
 }
 
 func UpdateDoctorAvailability(c *fiber.Ctx) error {
-	id := c.Query("id")
+	id := c.Query("doctorAvailabilityId")
 	var availability dto.DoctorAvailability
 	if err := c.BodyParser(&availability); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
 	}
 	if err := dao.DB_UpdateDoctorAvailability(id, availability); err != nil {
+		if err == mongo.ErrNoDocuments {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Availability record not found"})
+		}
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update availability"})
 	}
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Availability updated successfully"})
 }
 
 func DeleteDoctorAvailability(c *fiber.Ctx) error {
-	id := c.Query("id")
+	id := c.Query("doctorAvailabilityId")
 	if err := dao.DB_DeleteDoctorAvailability(id); err != nil {
+		if err == mongo.ErrNoDocuments {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Availability record not found"})
+		}
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to delete availability"})
 	}
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Availability deleted successfully"})

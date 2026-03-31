@@ -402,3 +402,31 @@ func DB_RevertStockDeduction(billItems []dto.BillItem) error {
 	}
 	return nil
 }
+
+// DB_GetMedicineNamesByIDs returns a map of medicineId -> medicine name for the given IDs.
+func DB_GetMedicineNamesByIDs(medicineIDs []string) (map[string]string, error) {
+	ctx := context.Background()
+	result := make(map[string]string)
+	if len(medicineIDs) == 0 {
+		return result, nil
+	}
+
+	// Build an $in filter using the custom string field "medicineid"
+	filter := bson.M{"medicineid": bson.M{"$in": medicineIDs}}
+	cursor, err := dbConfigs.MedicineCollection.Find(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var medicines []dto.MedicineModel
+	if err = cursor.All(ctx, &medicines); err != nil {
+		return nil, err
+	}
+
+	for _, m := range medicines {
+		result[m.MedicineId] = m.Name
+	}
+	return result, nil
+}
+

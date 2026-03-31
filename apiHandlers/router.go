@@ -95,6 +95,7 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 	app.Post("/billing/deduct", api.DeductStockFEFO)
 	app.Post("/billing/create-bill", api.CreateBill)
 	app.Post("/billing/confirm/billId", api.ConfirmBill)
+	app.Get("/billing/pdf", api.GenerateBillPDF)
 
 	// ========== MEDICINE ORDER ROUTES ==========
 	app.Post("/medicine-orders", api.CreateMedicineOrder)
@@ -105,15 +106,15 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 	// ========== NEW DOCTOR SCHEDULING ROUTES ==========
 	// Doctor Weekly Schedule
 	app.Post("/doctor-weekly-schedule", api.CreateDoctorWeeklySchedule)
-	app.Put("/doctor-weekly-schedule/id", api.UpdateDoctorWeeklySchedule)
-	app.Delete("/doctor-weekly-schedule/id", api.DeleteDoctorWeeklySchedule)
+	app.Put("/doctor-weekly-schedule/doctorId", api.UpdateDoctorWeeklySchedule)
+	app.Delete("/doctor-weekly-schedule/doctorId", api.DeleteDoctorWeeklySchedule)
 	app.Get("/doctor-weekly-schedule", api.GetAllDoctorWeeklySchedules)
 	app.Get("/doctor-weekly-schedule/available-dates", api.GetDoctorAvailableDatesForWeek)
 
 	// Doctor Availability
 	app.Post("/doctor-availability", api.CreateDoctorAvailability)
-	app.Put("/doctor-availability/id", api.UpdateDoctorAvailability)
-	app.Delete("/doctor-availability/id", api.DeleteDoctorAvailability)
+	app.Put("/doctor-availability/doctorAvailabilityId", api.UpdateDoctorAvailability)
+	app.Delete("/doctor-availability/doctorAvailabilityId", api.DeleteDoctorAvailability)
 	app.Get("/doctor-availability", api.GetAllDoctorAvailabilities)
 	app.Get("/doctor-availability/check", api.CheckDoctorAvailability)
 }
