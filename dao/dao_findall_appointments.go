@@ -172,3 +172,54 @@ func DB_FindAppointmentsByDoctorIDSortedByNumber(doctorID string, appointmentDat
 
 	return appointments, total, nil
 }
+
+// DB_FindAppointmentsByDoctorDateStatus returns a paginated list of appointments
+// for a specific doctor on a specific date with a specific status, sorted by appointmentNumber ascending.
+func DB_FindAppointmentsByDoctorDateStatus(doctorID string, appointmentDate time.Time, status string, page, limit int) ([]dto.AppointmentModel, int64, error) {
+	ctx := context.Background()
+
+	// Define range for the entire day (Start of day to End of day)
+	startOfDay := time.Date(appointmentDate.Year(), appointmentDate.Month(), appointmentDate.Day(), 0, 0, 0, 0, appointmentDate.Location())
+	endOfDay := startOfDay.Add(24 * time.Hour)
+
+	filter := bson.M{
+		"doctorId": doctorID,
+		"status":   status,
+		"appointmentDate": bson.M{
+			"$gte": startOfDay,
+			"$lt":  endOfDay,
+		},
+	}
+
+	total, err := dbConfigs.AppointmentCollection.CountDocuments(ctx, filter)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	skip := int64((page - 1) * limit)
+	findOptions := options.Find().
+		SetSort(bson.D{{Key: "appointmentNumber", Value: 1}}).
+		SetSkip(skip).
+		SetLimit(int64(limit))
+
+	cursor, err := dbConfigs.AppointmentCollection.Find(ctx, filter, findOptions)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer cursor.Close(ctx)
+
+	var appointments []dto.AppointmentModel
+	for cursor.Next(ctx) {
+		var a dto.AppointmentModel
+		if err := cursor.Decode(&a); err != nil {
+			return nil, 0, err
+		}
+		appointments = append(appointments, a)
+	}
+
+	if err := cursor.Err(); err != nil {
+		return nil, 0, err
+	}
+
+	return appointments, total, nil
+}

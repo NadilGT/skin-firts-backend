@@ -166,3 +166,60 @@ func GetAppointmentsByPatientID(c *fiber.Ctx) error {
 		"totalPages": totalPages,
 	})
 }
+
+// GET /findAll/appointments/doctor/detailed?doctorId=DOC-001&date=2025-11-18&status=pending&page=1&limit=10
+// Returns appointments for a doctor on a specific date with a specific status, sorted by appointmentNumber ascending.
+func GetAppointmentsByDoctorDateStatus(c *fiber.Ctx) error {
+	doctorID := c.Query("doctorId")
+	dateStr := c.Query("date")
+	status := c.Query("status")
+
+	if doctorID == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Doctor ID is required",
+		})
+	}
+
+	if dateStr == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Date is required (YYYY-MM-DD format)",
+		})
+	}
+
+	if status == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Status is required",
+		})
+	}
+
+	// Parse date (expecting YYYY-MM-DD)
+	appointmentDate, err := time.Parse("2006-01-02", dateStr)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid date format. Use YYYY-MM-DD",
+		})
+	}
+
+	page, limit := parsePagination(c)
+
+	appointments, total, err := dao.DB_FindAppointmentsByDoctorDateStatus(doctorID, appointmentDate, status, page, limit)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to fetch appointments for this doctor",
+		})
+	}
+
+	if appointments == nil {
+		appointments = []dto.AppointmentModel{}
+	}
+
+	totalPages := int(math.Ceil(float64(total) / float64(limit)))
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"data":       appointments,
+		"total":      total,
+		"page":       page,
+		"limit":      limit,
+		"totalPages": totalPages,
+	})
+}
