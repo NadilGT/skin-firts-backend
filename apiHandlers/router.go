@@ -128,4 +128,15 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 	// ========== REPORT ROUTES ==========
 	app.Post("/api/reports/upload", reportHandler.UploadReport)
 	app.Get("/api/reports", reportHandler.GetReportsByPatientID)
+
+	// ========== NOTIFICATION ROUTES ==========
+	// Notifications are created INTERNALLY by the backend — not via a public endpoint.
+	// Use functions.SaveAndSendNotification(...) wherever you trigger a notification.
+	//
+	// GET    /api/notifications?userId=&lastId=&limit= → cursor-based pagination (mobile)
+	// PATCH  /api/notifications/:id/read              → mark single as read (mobile)
+	// PATCH  /api/notifications/read-all?userId=      → mark all as read (mobile)
+	app.Get("/api/notifications", authMiddleware.ValidateToken, api.GetNotifications)
+	app.Patch("/api/notifications/:notificationId/read", authMiddleware.ValidateToken, api.MarkNotificationRead)
+	app.Patch("/api/notifications/read-all", authMiddleware.ValidateToken, api.MarkAllNotificationsRead)
 }

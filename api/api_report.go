@@ -126,21 +126,24 @@ func (h *ReportHandler) UploadReport(c *fiber.Ctx) error {
 		})
 	}
 
-	// 5. Send FCM Notification to the Patient
+	// 5. Save notification to DB and send FCM push (MongoDB first, FCM second)
 	fcmToken, err := dao.DB_GetPatientFCMToken(patientId)
 	if err == nil && fcmToken != "" {
-		notificationTitle := "Report Ready 📄"
-		notificationBody := fmt.Sprintf("Your report for '%s' is now available", title)
-		data := map[string]string{
-			"type":      "REPORT_READY",
-			"reportId":  reportId,
-			"patientId": patientId,
-		}
-		
-		// Send notification asynchronously in a goroutine to not block the response
 		go func() {
-			if err := functions.SendFCMNotification(h.App, fcmToken, notificationTitle, notificationBody, data); err != nil {
-				fmt.Printf("⚠️  Failed to send FCM notification: %v\n", err)
+			if err := functions.SaveAndSendNotification(
+				h.App,
+				fcmToken,
+				patientId,
+				"Report Ready 📄",
+				fmt.Sprintf("Your report for '%s' is now available", title),
+				"REPORT_READY",
+				map[string]string{
+					"type":      "REPORT_READY",
+					"reportId":  reportId,
+					"patientId": patientId,
+				},
+			); err != nil {
+				fmt.Printf("⚠️  Notification pipeline failed: %v\n", err)
 			}
 		}()
 	}
