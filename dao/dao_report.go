@@ -19,3 +19,22 @@ func DB_SaveReport(report dto.ReportModel) error {
 	}
 	return nil
 }
+
+// DB_GetReportsByPatientID fetches all reports associated with a patient by their Firebase UID.
+func DB_GetReportsByPatientID(patientID string) ([]dto.ReportModel, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	var reports []dto.ReportModel
+	cursor, err := dbConfigs.ReportCollection.Find(ctx, map[string]string{"patientId": patientID})
+	if err != nil {
+		return nil, fmt.Errorf("failed to query reports: %w", err)
+	}
+	defer cursor.Close(ctx)
+
+	if err := cursor.All(ctx, &reports); err != nil {
+		return nil, fmt.Errorf("failed to decode reports: %w", err)
+	}
+
+	return reports, nil
+}

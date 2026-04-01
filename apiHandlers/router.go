@@ -127,4 +127,5 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 
 	// ========== REPORT ROUTES ==========
 	app.Post("/api/reports/upload", reportHandler.UploadReport)
+	app.Get("/api/reports", reportHandler.GetReportsByPatientID)
 }

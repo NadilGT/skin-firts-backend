@@ -152,3 +152,22 @@ func (h *ReportHandler) UploadReport(c *fiber.Ctx) error {
 		"patientId": patientId,
 	})
 }
+
+// GetReportsByPatientID handles GET /api/reports?userId=...
+func (h *ReportHandler) GetReportsByPatientID(c *fiber.Ctx) error {
+	patientID := c.Query("userId")
+	if patientID == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Missing 'userId' query parameter",
+		})
+	}
+
+	reports, err := dao.DB_GetReportsByPatientID(patientID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to retrieve reports: " + err.Error(),
+		})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(reports)
+}
