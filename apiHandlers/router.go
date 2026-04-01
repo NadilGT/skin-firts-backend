@@ -17,6 +17,7 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 	staffHandler := api.NewStaffHandler(firebaseApp)
 	imageUploadHandler := api.NewImageUploadHandler(firebaseApp)
 	appointmentStatusHandler := api.NewAppointmentStatusHandler(firebaseApp)
+	reportHandler := api.NewReportHandler(firebaseApp)
 
 	// Admin-only role management routes
 	app.Post("/admin/create-staff",authMiddleware.ValidateToken, RequiresRole("admin"), staffHandler.CreateStaffAccount)
@@ -123,4 +124,7 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 	app.Delete("/doctor-availability/doctorAvailabilityId", api.DeleteDoctorAvailability)
 	app.Get("/doctor-availability", api.GetAllDoctorAvailabilities)
 	app.Get("/doctor-availability/check", api.CheckDoctorAvailability)
+
+	// ========== REPORT ROUTES ==========
+	app.Post("/api/reports/upload", reportHandler.UploadReport)
 }
