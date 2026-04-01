@@ -4,6 +4,7 @@ import (
 	"context"
 	"lawyerSL-Backend/dbConfigs"
 	"lawyerSL-Backend/dto"
+	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -123,10 +124,21 @@ func DB_FindAppointmentsByPatientID(patientID string, page, limit int) ([]dto.Ap
 	return appointments, total, nil
 }
 // DB_FindAppointmentsByDoctorIDSortedByNumber returns a paginated list of appointments
-// for a specific doctor, sorted by appointmentNumber ascending (smallest → largest).
-func DB_FindAppointmentsByDoctorIDSortedByNumber(doctorID string, page, limit int) ([]dto.AppointmentModel, int64, error) {
+// for a specific doctor on a specific date, sorted by appointmentNumber ascending (smallest → largest).
+func DB_FindAppointmentsByDoctorIDSortedByNumber(doctorID string, appointmentDate time.Time, page, limit int) ([]dto.AppointmentModel, int64, error) {
 	ctx := context.Background()
-	filter := bson.M{"doctorId": doctorID}
+
+	// Define range for the entire day (Start of day to End of day)
+	startOfDay := time.Date(appointmentDate.Year(), appointmentDate.Month(), appointmentDate.Day(), 0, 0, 0, 0, appointmentDate.Location())
+	endOfDay := startOfDay.Add(24 * time.Hour)
+
+	filter := bson.M{
+		"doctorId": doctorID,
+		"appointmentDate": bson.M{
+			"$gte": startOfDay,
+			"$lt":  endOfDay,
+		},
+	}
 
 	total, err := dbConfigs.AppointmentCollection.CountDocuments(ctx, filter)
 	if err != nil {

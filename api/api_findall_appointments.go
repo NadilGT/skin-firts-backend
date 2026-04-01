@@ -5,6 +5,7 @@ import (
 	"lawyerSL-Backend/dto"
 	"math"
 	"strconv"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -84,19 +85,35 @@ func GetAppointmentsByDoctorID(c *fiber.Ctx) error {
 		"totalPages": totalPages,
 	})
 }
-// GET /findAll/appointments/doctor/ordered?doctorId=DOC-001&page=1&limit=10
-// Returns appointments for a doctor sorted by appointmentNumber ascending (1, 2, 3 …)
+// GET /findAll/appointments/doctor/ordered?doctorId=DOC-001&date=2025-11-18&page=1&limit=10
+// Returns appointments for a doctor on a specific date, sorted by appointmentNumber ascending (1, 2, 3 …)
 func GetAppointmentsByDoctorIDSortedByNumber(c *fiber.Ctx) error {
 	doctorID := c.Query("doctorId")
+	dateStr := c.Query("date")
+
 	if doctorID == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "Doctor ID is required",
 		})
 	}
 
+	if dateStr == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Date is required (YYYY-MM-DD format)",
+		})
+	}
+
+	// Parse date (expecting YYYY-MM-DD)
+	appointmentDate, err := time.Parse("2006-01-02", dateStr)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid date format. Use YYYY-MM-DD",
+		})
+	}
+
 	page, limit := parsePagination(c)
 
-	appointments, total, err := dao.DB_FindAppointmentsByDoctorIDSortedByNumber(doctorID, page, limit)
+	appointments, total, err := dao.DB_FindAppointmentsByDoctorIDSortedByNumber(doctorID, appointmentDate, page, limit)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Failed to fetch appointments for this doctor",
