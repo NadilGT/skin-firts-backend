@@ -56,39 +56,68 @@ func (h *AppointmentStatusHandler) UpdateAppointmentStatus(c *fiber.Ctx) error {
 	})
 }
 
-// notifyPatient fetches appointment + patient FCM token and sends the push notification.
-// Runs in a goroutine so it never delays the HTTP response.
+// notifyPatient fetches appointment + patient FCM token, saves the notification to
+// MongoDB, and fires the FCM push. Runs in a goroutine so it never delays the HTTP response.
 func (h *AppointmentStatusHandler) notifyPatient(appointmentID string, status string) {
 	// Fetch the full appointment to get patientId and appointment details
 	appointment, err := dao.DB_GetAppointmentByAppointmentID(appointmentID)
 	if err != nil {
-		log.Printf("⚠️  FCM notify: could not fetch appointment %s: %v", appointmentID, err)
+		log.Printf("⚠️  Notify: could not fetch appointment %s: %v", appointmentID, err)
 		return
 	}
 
 	if appointment.PatientID == "" {
-		log.Printf("⚠️  FCM notify: appointment %s has no patientId, skipping", appointmentID)
+		log.Printf("⚠️  Notify: appointment %s has no patientId, skipping", appointmentID)
 		return
 	}
 
 	// Fetch FCM token from patients collection (keyed by Firebase UID = patientId)
 	fcmToken, err := dao.DB_GetPatientFCMToken(appointment.PatientID)
 	if err != nil {
-		log.Printf("⚠️  FCM notify: could not fetch FCM token for patient %s: %v", appointment.PatientID, err)
-		return
+		log.Printf("⚠️  Notify: could not fetch FCM token for patient %s: %v", appointment.PatientID, err)
+		// fcmToken will be empty — SaveAndSendNotification still saves to DB
 	}
 
 	title, body := buildNotificationContent(status, appointment)
 
 	data := map[string]string{
+		"type":            statusToNotifType(status),
 		"appointmentId":   appointment.AppointmentID,
 		"status":          status,
 		"doctorName":      appointment.DoctorName,
 		"appointmentDate": appointment.AppointmentDate.Format("2006-01-02"),
 	}
 
-	if err := functions.SendFCMNotification(h.FirebaseApp, fcmToken, title, body, data); err != nil {
-		log.Printf("⚠️  FCM notify: send failed for patient %s: %v", appointment.PatientID, err)
+	// Save to MongoDB first, then fire FCM push (best-effort)
+	if err := functions.SaveAndSendNotification(
+		h.FirebaseApp,
+		fcmToken,
+		appointment.PatientID,
+		title,
+		body,
+		statusToNotifType(status),
+		data,
+	); err != nil {
+		log.Printf("⚠️  Notify: pipeline failed for patient %s: %v", appointment.PatientID, err)
+	}
+}
+
+// statusToNotifType maps an appointment status string to a notification type constant
+// used by the Flutter app to route the user to the right screen.
+func statusToNotifType(status string) string {
+	switch status {
+	case "confirmed":
+		return "APPOINTMENT_CONFIRMED"
+	case "cancelled":
+		return "APPOINTMENT_CANCELLED"
+	case "completed":
+		return "APPOINTMENT_COMPLETED"
+	case "running":
+		return "APPOINTMENT_RUNNING"
+	case "pending":
+		return "APPOINTMENT_PENDING"
+	default:
+		return "APPOINTMENT_UPDATE"
 	}
 }
 
