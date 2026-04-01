@@ -122,3 +122,41 @@ func DB_FindAppointmentsByPatientID(patientID string, page, limit int) ([]dto.Ap
 
 	return appointments, total, nil
 }
+// DB_FindAppointmentsByDoctorIDSortedByNumber returns a paginated list of appointments
+// for a specific doctor, sorted by appointmentNumber ascending (smallest → largest).
+func DB_FindAppointmentsByDoctorIDSortedByNumber(doctorID string, page, limit int) ([]dto.AppointmentModel, int64, error) {
+	ctx := context.Background()
+	filter := bson.M{"doctorId": doctorID}
+
+	total, err := dbConfigs.AppointmentCollection.CountDocuments(ctx, filter)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	skip := int64((page - 1) * limit)
+	findOptions := options.Find().
+		SetSort(bson.D{{Key: "appointmentNumber", Value: 1}}).
+		SetSkip(skip).
+		SetLimit(int64(limit))
+
+	cursor, err := dbConfigs.AppointmentCollection.Find(ctx, filter, findOptions)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer cursor.Close(ctx)
+
+	var appointments []dto.AppointmentModel
+	for cursor.Next(ctx) {
+		var a dto.AppointmentModel
+		if err := cursor.Decode(&a); err != nil {
+			return nil, 0, err
+		}
+		appointments = append(appointments, a)
+	}
+
+	if err := cursor.Err(); err != nil {
+		return nil, 0, err
+	}
+
+	return appointments, total, nil
+}
