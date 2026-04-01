@@ -16,6 +16,7 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 	roleHandler := NewRoleAssignmentHandler(firebaseApp)
 	staffHandler := api.NewStaffHandler(firebaseApp)
 	imageUploadHandler := api.NewImageUploadHandler(firebaseApp)
+	appointmentStatusHandler := api.NewAppointmentStatusHandler(firebaseApp)
 
 	// Admin-only role management routes
 	app.Post("/admin/create-staff",authMiddleware.ValidateToken, RequiresRole("admin"), staffHandler.CreateStaffAccount)
@@ -59,6 +60,9 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 	app.Get("/doctor-info/favorite", api.GetFavoriteDoctors)
 	app.Put("/doctor-info/favorite", api.ToggleFavoriteDoctor)
 
+	// ========== FCM TOKEN ROUTES ==========
+	app.Post("/api/users/save-token", api.SaveFCMToken)
+
 	// ========== APPOINTMENT ROUTES ==========
 	app.Get("/appointment/next-number/doctorId", api.GetNextAppointmentNumber)
 	app.Get("/appointments/running/doctorId", api.GetRunningAppointmentNumber)
@@ -71,7 +75,7 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 	app.Get("/findAll/appointments/patient", api.GetAppointmentsByPatientID)
 	app.Get("/appointments/id/appointmentId", api.GetAppointmentByID)
 	app.Put("/appointments/id/reschedule", api.RescheduleAppointment)
-	app.Patch("/appointments/id/status", api.UpdateAppointmentStatus)
+	app.Patch("/appointments/id/status", appointmentStatusHandler.UpdateAppointmentStatus)
 
 	// ========== DOCTOR SCHEDULE ROUTES ==========
 	app.Post("/doctor-schedule", api.CreateDoctorSchedule)

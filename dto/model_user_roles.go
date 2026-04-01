@@ -17,6 +17,7 @@ type PatientUser struct {
 	Email       string    `json:"email"       bson:"email"`
 	PhoneNumber string    `json:"phoneNumber" bson:"phoneNumber"`
 	Role        string    `json:"role"        bson:"role"`
+	FcmToken    string    `json:"fcmToken,omitempty" bson:"fcmToken,omitempty"`
 	CreatedAt   time.Time `json:"createdAt"   bson:"createdAt"`
 }
 
