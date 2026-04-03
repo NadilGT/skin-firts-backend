@@ -51,6 +51,12 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 	// ========== FOCUS ROUTES ==========
 	app.Post("/focus", authMiddleware.ValidateToken, api.CreateFocus)
 	app.Get("/findAll/focus", api.GetAllFocuses)
+	
+	// ========== SERVICE ROUTES ==========
+	app.Post("/admin/services", api.CreateService)
+	app.Get("/services", api.GetAllServices)
+	app.Put("/admin/services/serviceId",api.UpdateService)
+	app.Delete("/admin/services/serviceId", api.DeleteService)
 
 	// ========== DOCTOR ROUTES ==========
 	app.Post("/doctor", authMiddleware.ValidateToken, RequiresRole("admin"), api.CreateDoctor)
