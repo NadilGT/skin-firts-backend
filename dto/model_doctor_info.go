@@ -15,3 +15,21 @@ type DoctorInfoModel struct {
 	Favorite   bool     `json:"favorite" bson:"favorite"` 
 	ProfilePic string 	`json:"profile_pic" bson:"profile_pic"`
 }
+
+// SearchDoctorInfoQuery represents the query parameters for searching doctor info.
+type SearchDoctorInfoQuery struct {
+	Query  string `json:"query" query:"query"`
+	Focus  string `json:"focus" query:"focus"`
+	Special string `json:"special" query:"special"`
+	Page   int    `json:"page" query:"page"`
+	Limit  int    `json:"limit" query:"limit"`
+}
+
+// DoctorInfoSearchResponse represents the paginated response for a doctor info search.
+type DoctorInfoSearchResponse struct {
+	Data       []DoctorInfoModel `json:"data"`
+	Total      int64             `json:"total"`
+	Page       int               `json:"page"`
+	Limit      int               `json:"limit"`
+	TotalPages int               `json:"totalPages"`
+}

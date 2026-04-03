@@ -174,3 +174,42 @@ func (h *StaffHandler) CreateStaffAccount(c *fiber.Ctx) error {
 		"resetLink": resetLink, // Note: returning this just for easy local debugging if needed. Can be omitted in prod.
 	})
 }
+
+// GET /admin/search-staff
+// Super Admin only: Searches for staff members across all categories with pagination.
+func (h *StaffHandler) SearchStaff(c *fiber.Ctx) error {
+	var query dto.SearchStaffQuery
+	if err := c.QueryParser(&query); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid query parameters: " + err.Error(),
+		})
+	}
+
+	// Default pagination
+	if query.Page <= 0 {
+		query.Page = 1
+	}
+	if query.Limit <= 0 {
+		query.Limit = 10
+	}
+	if query.Limit > 100 {
+		query.Limit = 100
+	}
+
+	staff, total, err := dao.DB_SearchStaff(query)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to search staff: " + err.Error(),
+		})
+	}
+
+	totalPages := (total + int64(query.Limit) - 1) / int64(query.Limit)
+
+	return c.Status(fiber.StatusOK).JSON(dto.StaffSearchResponse{
+		Data:       staff,
+		Total:      total,
+		Page:       query.Page,
+		Limit:      query.Limit,
+		TotalPages: int(totalPages),
+	})
+}
