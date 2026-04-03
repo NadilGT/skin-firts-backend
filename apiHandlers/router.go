@@ -21,6 +21,7 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 
 	// Admin-only role management routes
 	app.Post("/admin/create-staff",authMiddleware.ValidateToken, RequiresRole("admin"), staffHandler.CreateStaffAccount)
+	app.Get("/admin/search-staff", staffHandler.SearchStaff)
 
 	// Admin-only role management routes
 	app.Post("/admin/assign-roles", authMiddleware.ValidateToken, RequiresRole("admin"), roleHandler.AssignRoles)
@@ -53,6 +54,7 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 	// ========== DOCTOR ROUTES ==========
 	app.Post("/doctor", authMiddleware.ValidateToken, RequiresRole("admin"), api.CreateDoctor)
 	app.Get("/doctors", authMiddleware.ValidateToken, api.FindAllDoctors)
+	app.Get("/doctors/search", api.SearchDoctorInfo)
 	app.Get("/findAll/doctors/focus", api.GetDoctorsByFocus)
 	app.Get("/doctor-info", authMiddleware.ValidateToken, api.FindDoctorInfoByName)
 	app.Post("/doctor-info", authMiddleware.ValidateToken, RequiresRole("admin"), api.CreateDoctorInfo)

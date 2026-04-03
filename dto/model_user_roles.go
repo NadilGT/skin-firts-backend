@@ -63,3 +63,31 @@ type RegisterUserRequest struct {
 	Email       string `json:"email"`
 	PhoneNumber string `json:"phoneNumber"`
 }
+
+// SearchStaffQuery represents the query parameters for searching staff.
+type SearchStaffQuery struct {
+	Query string `json:"query" query:"query"`
+	Role  string `json:"role" query:"role"`
+	Page  int    `json:"page" query:"page"`
+	Limit int    `json:"limit" query:"limit"`
+}
+
+// StaffMember is a unified representation of any staff/admin/doctor user for search results.
+type StaffMember struct {
+	UserID      string    `json:"userId"      bson:"userId"`
+	FirebaseUID string    `json:"firebaseUid" bson:"firebaseUid"`
+	Name        string    `json:"name"        bson:"name"`
+	Email       string    `json:"email"       bson:"email"`
+	PhoneNumber string    `json:"phoneNumber" bson:"phoneNumber"`
+	Role        string    `json:"role"        bson:"role"`
+	CreatedAt   time.Time `json:"createdAt"   bson:"createdAt"`
+}
+
+// StaffSearchResponse represents the paginated response for a staff search.
+type StaffSearchResponse struct {
+	Data       []StaffMember `json:"data"`
+	Total      int64         `json:"total"`
+	Page       int           `json:"page"`
+	Limit      int           `json:"limit"`
+	TotalPages int           `json:"totalPages"`
+}
