@@ -91,3 +91,19 @@ type StaffSearchResponse struct {
 	Limit      int           `json:"limit"`
 	TotalPages int           `json:"totalPages"`
 }
+
+// SearchPatientQuery represents the query parameters for searching patients.
+type SearchPatientQuery struct {
+	Query string `json:"query" query:"query"`
+	Page  int    `json:"page" query:"page"`
+	Limit int    `json:"limit" query:"limit"`
+}
+
+// PatientSearchResponse represents the paginated response for a patient search.
+type PatientSearchResponse struct {
+	Data       []PatientUser `json:"data"`
+	Total      int64         `json:"total"`
+	Page       int           `json:"page"`
+	Limit      int           `json:"limit"`
+	TotalPages int           `json:"totalPages"`
+}
