@@ -74,3 +74,13 @@ func DB_CheckServiceExists(identifier string) (bool, error) {
 
 	return count > 0, nil
 }
+
+// DB_GetServiceByServiceId retrieves a service by its serviceId string.
+func DB_GetServiceByServiceId(serviceId string) (*dto.ServiceModel, error) {
+	var service dto.ServiceModel
+	err := dbConfigs.ServiceCollection.FindOne(context.Background(), bson.M{"serviceId": serviceId}).Decode(&service)
+	if err != nil {
+		return nil, err
+	}
+	return &service, nil
+}

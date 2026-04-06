@@ -23,6 +23,7 @@ var FocusCollection *mongo.Collection
 var DoctorWeeklyScheduleCollection *mongo.Collection
 var DoctorAvailabilityCollection *mongo.Collection
 var BillCollection *mongo.Collection
+var HospitalBillCollection *mongo.Collection
 var NotificationCollection *mongo.Collection
 
 // Role-based user collections
@@ -63,6 +64,7 @@ func ConnectMongoDB(uri string) *mongo.Client {
 	DoctorWeeklyScheduleCollection = db.Collection("doctor_weekly_schedules")
 	DoctorAvailabilityCollection = db.Collection("doctor_availabilities")
 	BillCollection = db.Collection("bills")
+	HospitalBillCollection = db.Collection("hospital_bills")
 
 	// Role-based user collections
 	PatientCollection = db.Collection("patients")
