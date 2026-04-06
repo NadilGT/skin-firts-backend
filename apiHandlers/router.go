@@ -12,6 +12,12 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 		return c.SendString("Hello from Fiber on Render!")
 	})
 
+	// ========== APP DOWNLOAD ROUTE ==========
+	app.Get("/download/app", func(c *fiber.Ctx) error {
+		// Forces the browser to download the APK instead of returning it as text
+		return c.Download("./uploads/app/skin_first_app.apk", "Skin_First.apk")
+	})
+
 	// ========== ROLE MANAGEMENT ROUTES ==========
 	roleHandler := NewRoleAssignmentHandler(firebaseApp)
 	staffHandler := api.NewStaffHandler(firebaseApp)
