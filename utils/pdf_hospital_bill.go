@@ -112,6 +112,18 @@ func GenerateHospitalBillPDF(bill *dto.HospitalBillModel) ([]byte, error) {
 	rightValue(bill.DoctorName)
 	pdf.Ln(6)
 
+	leftLabel("Patient Phone:")
+	leftValue(bill.PatientPhone)
+	rightLabel("Visit Type:")
+	rightValue(bill.VisitType)
+	pdf.Ln(6)
+
+	leftLabel("Patient Email:")
+	leftValue(bill.PatientEmail)
+	rightLabel("Visit Date:")
+	rightValue(bill.VisitDate)
+	pdf.Ln(6)
+
 	leftLabel("Patient ID:")
 	leftValue(bill.PatientID)
 	rightLabel("Doctor ID:")
@@ -153,11 +165,45 @@ func GenerateHospitalBillPDF(bill *dto.HospitalBillModel) ([]byte, error) {
 	}
 
 	// ─────────────────────────────────────────────
-	// GRAND TOTAL box
+	// TOTALS breakdown section
 	// ─────────────────────────────────────────────
 	pdf.Ln(4)
-	totalBoxX := 15 + colW[0] + colW[1] + colW[2]
-	totalBoxW := colW[3]
+	subtotal := 0.0
+	for _, item := range bill.Items {
+		subtotal += item.Total
+	}
+
+	labelW := colW[0] + colW[1] + colW[2]
+	valueW := colW[3]
+
+	// Sub-calculated rows
+	drawRow := func(label string, value float64, isNegative bool) {
+		pdf.SetFont("Arial", "B", 9)
+		setColor(pdf, 80, 80, 80)
+		pdf.CellFormat(labelW, 7, label, "0", 0, "R", false, 0, "")
+		
+		pdf.SetFont("Arial", "", 9)
+		setColor(pdf, 30, 30, 30)
+		prefix := ""
+		if isNegative {
+			prefix = "-"
+		}
+		pdf.CellFormat(valueW, 7, fmt.Sprintf("%sRs. %.2f", prefix, value), "0", 1, "R", false, 0, "")
+	}
+
+	drawRow("Subtotal:", subtotal, false)
+	if bill.Tax > 0 {
+		drawRow("Tax:", bill.Tax, false)
+	}
+	if bill.Discount > 0 {
+		drawRow("Discount:", bill.Discount, true)
+	}
+
+	pdf.Ln(2)
+
+	// GRAND TOTAL box
+	totalBoxX := 15 + labelW
+	totalBoxW := valueW
 
 	setFill(pdf, 15, 98, 112)
 	setDraw(pdf, 15, 98, 112)
@@ -166,7 +212,7 @@ func GenerateHospitalBillPDF(bill *dto.HospitalBillModel) ([]byte, error) {
 	pdf.SetFont("Arial", "B", 10)
 	setColor(pdf, 15, 98, 112)
 	pdf.SetX(15)
-	pdf.CellFormat(colW[0]+colW[1]+colW[2], 10, "Grand Total:", "0", 0, "R", false, 0, "")
+	pdf.CellFormat(labelW, 10, "Grand Total:", "0", 0, "R", false, 0, "")
 
 	setColor(pdf, 255, 255, 255)
 	pdf.CellFormat(totalBoxW, 10, fmt.Sprintf("Rs. %.2f", bill.TotalAmount), "0", 1, "R", false, 0, "")
