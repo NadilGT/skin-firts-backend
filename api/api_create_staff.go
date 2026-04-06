@@ -85,25 +85,27 @@ func (h *StaffHandler) CreateStaffAccount(c *fiber.Ctx) error {
 		log.Println("⚠️ Failed to generate password reset link:", err)
 		// We won't rollback here, but we'll notify that email sending failed
 	} else {
-		// Send the email using our SMTP utility
-		emailSubject := "Welcome to the Med Center Portal - Set up your account"
-		emailBody := fmt.Sprintf(`
-			<h2>Hello %s!</h2>
-			<p>An account has been created for you as a <strong>%s</strong>.</p>
-			<p>Please click the link below to set your password and access the portal:</p>
-			<a href="%s" style="padding:10px 15px;background-color:#007bff;color:white;text-decoration:none;border-radius:5px;">Set Password</a>
-			<br><br>
-			<p>If the button doesn't work, copy and paste this link into your browser:</p>
-			<p>%s</p>
-			<br>
-			<p>Thanks,<br>Management Team</p>
-		`, req.Name, req.Role, resetLink, resetLink)
+		// Send the email asynchronously so it doesn't block the API response
+		go func(email, name, role, link string) {
+			emailSubject := "Welcome to the Med Center Portal - Set up your account"
+			emailBody := fmt.Sprintf(`
+				<h2>Hello %s!</h2>
+				<p>An account has been created for you as a <strong>%s</strong>.</p>
+				<p>Please click the link below to set your password and access the portal:</p>
+				<a href="%s" style="padding:10px 15px;background-color:#007bff;color:white;text-decoration:none;border-radius:5px;">Set Password</a>
+				<br><br>
+				<p>If the button doesn't work, copy and paste this link into your browser:</p>
+				<p>%s</p>
+				<br>
+				<p>Thanks,<br>Management Team</p>
+			`, name, role, link, link)
 
-		if err := utils.SendEmail([]string{req.Email}, emailSubject, emailBody); err != nil {
-			log.Println("⚠️ Failed to send password reset email:", err)
-		} else {
-			log.Println("✅ Password reset email sent securely to:", req.Email)
-		}
+			if err := utils.SendEmail([]string{email}, emailSubject, emailBody); err != nil {
+				log.Println("⚠️ Failed to send password reset email:", err)
+			} else {
+				log.Println("✅ Password reset email sent securely to:", email)
+			}
+		}(req.Email, req.Name, req.Role, resetLink)
 	}
 
 	// 4. Save to MongoDB
