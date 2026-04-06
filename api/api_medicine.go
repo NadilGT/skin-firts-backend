@@ -298,6 +298,7 @@ func CreateBill(c *fiber.Ctx) error {
 
 	additionalChargesStr := c.Query("additionalCharges", "0")
 	additionalCharges, _ := strconv.ParseFloat(additionalChargesStr, 64)
+	patientID := c.Query("patientId")
 
 	var allBillItems []dto.BillItem
 	var totalMedicinePrice float64
@@ -326,6 +327,7 @@ func CreateBill(c *fiber.Ctx) error {
 	bill := dto.BillModel{
 		ID:                 primitive.NewObjectID(),
 		BillId:             billId,
+		PatientID:          patientID,
 		Items:              allBillItems,
 		TotalMedicinePrice: totalMedicinePrice,
 		AdditionalCharges:  additionalCharges,

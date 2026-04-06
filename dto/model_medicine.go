@@ -71,6 +71,7 @@ type BillResponse struct {
 type BillModel struct {
 	ID                 primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
 	BillId             string             `json:"billId" bson:"billId"`
+	PatientID          string             `json:"patientId,omitempty" bson:"patientId,omitempty"`
 	Items              []BillItem         `json:"items" bson:"items"`
 	TotalMedicinePrice float64            `json:"totalMedicinePrice" bson:"totalMedicinePrice"`
 	AdditionalCharges  float64            `json:"additionalCharges" bson:"additionalCharges"`
