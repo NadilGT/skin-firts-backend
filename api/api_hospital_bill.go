@@ -21,17 +21,39 @@ func CreateHospitalBill(c *fiber.Ctx) error {
 		})
 	}
 
-	if req.ServiceID == "" || req.Quantity <= 0 {
+	if len(req.Items) == 0 {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Valid serviceId and quantity (>0) are required",
+			"error": "At least one service item is required",
 		})
 	}
 
-	// 1. Fetch Service Details
-	service, err := dao.DB_GetServiceByServiceId(req.ServiceID)
-	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Service not found: " + err.Error(),
+	// 1. Fetch Service Details for all items and calculate total
+	var totalAmount float64
+	var billItems []dto.HospitalBillItem
+
+	for _, item := range req.Items {
+		if item.ServiceID == "" || item.Quantity <= 0 {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "Valid serviceId and quantity (>0) are required for all items",
+			})
+		}
+
+		service, err := dao.DB_GetServiceByServiceId(item.ServiceID)
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "Service not found: " + item.ServiceID,
+			})
+		}
+
+		itemTotal := service.UnitPrice * float64(item.Quantity)
+		totalAmount += itemTotal
+
+		billItems = append(billItems, dto.HospitalBillItem{
+			ServiceID:   service.ServiceID,
+			ServiceName: service.Name,
+			Quantity:    item.Quantity,
+			UnitPrice:   service.UnitPrice,
+			Total:       itemTotal,
 		})
 	}
 
@@ -57,8 +79,6 @@ func CreateHospitalBill(c *fiber.Ctx) error {
 	}
 
 	// 3. Prepare the Bill Document
-	totalAmount := service.UnitPrice * float64(req.Quantity)
-
 	bill := dto.HospitalBillModel{
 		ID:             primitive.NewObjectID(),
 		HospitalBillId: hospitalBillId,
@@ -66,10 +86,7 @@ func CreateHospitalBill(c *fiber.Ctx) error {
 		PatientName:    pName,
 		DoctorID:       req.DoctorID,
 		DoctorName:     dName,
-		ServiceID:      service.ServiceID,
-		ServiceName:    service.Name,
-		Quantity:       req.Quantity,
-		UnitPrice:      service.UnitPrice,
+		Items:          billItems,
 		TotalAmount:    totalAmount,
 		Confirm:        false,
 		CreatedAt:      time.Now(),
