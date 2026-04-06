@@ -113,6 +113,11 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 	app.Post("/billing/confirm/billId", api.ConfirmBill)
 	app.Get("/billing/pdf", api.GenerateBillPDF)
 
+	// Hospital Bill Routes
+	app.Post("/billing/hospital-bill", api.CreateHospitalBill)
+	app.Put("/billing/hospital-bill/confirm/:id", api.ConfirmHospitalBill)
+	app.Get("/billing/hospital-bill/:id/pdf", api.DownloadHospitalBillPDF)
+
 	// ========== MEDICINE ORDER ROUTES ==========
 	app.Post("/medicine-orders", api.CreateMedicineOrder)
 	app.Get("/medicine-orders/:id", api.GetMedicineOrder)
