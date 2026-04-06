@@ -21,9 +21,15 @@ type HospitalBillModel struct {
 	HospitalBillId string              `json:"hospitalBillId" bson:"hospitalBillId"`
 	PatientID      string              `json:"patientId" bson:"patientId"`
 	PatientName    string              `json:"patientName" bson:"patientName"`
+	PatientPhone   string              `json:"patientPhone" bson:"patientPhone"`
+	PatientEmail   string              `json:"patientEmail" bson:"patientEmail"`
 	DoctorID       string              `json:"doctorId" bson:"doctorId"`
 	DoctorName     string              `json:"doctorName" bson:"doctorName"`
+	VisitType      string              `json:"visitType" bson:"visitType"`
+	VisitDate      string              `json:"visitDate" bson:"visitDate"`
 	Items          []HospitalBillItem  `json:"items" bson:"items"`
+	Discount       float64             `json:"discount" bson:"discount"`
+	Tax            float64             `json:"tax" bson:"tax"`
 	TotalAmount    float64             `json:"totalAmount" bson:"totalAmount"`
 	Confirm        bool                `json:"confirm" bson:"confirm"`
 	CreatedAt      time.Time           `json:"createdAt" bson:"createdAt"`
@@ -38,9 +44,15 @@ type BillServiceItem struct {
 
 // CreateHospitalBillRequest represents the incoming request payload for bill creation
 type CreateHospitalBillRequest struct {
-	Items       []BillServiceItem `json:"items" validate:"required,min=1"`
-	PatientID   string            `json:"patientId"`
-	PatientName string            `json:"patientName"`
-	DoctorID    string            `json:"doctorId"`
-	DoctorName  string            `json:"doctorName"`
+	Items        []BillServiceItem `json:"items" validate:"required,min=1"`
+	PatientID    string            `json:"patientId"`
+	PatientName  string            `json:"patientName"`
+	PatientPhone string            `json:"patientPhone"`
+	PatientEmail string            `json:"patientEmail"`
+	DoctorID     string            `json:"doctorId"`
+	DoctorName   string            `json:"doctorName"`
+	VisitType    string            `json:"visitType"`
+	VisitDate    string            `json:"visitDate"`
+	Discount     float64           `json:"discount"`
+	Tax          float64           `json:"tax"`
 }

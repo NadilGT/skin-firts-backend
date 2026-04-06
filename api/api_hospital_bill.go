@@ -27,8 +27,8 @@ func CreateHospitalBill(c *fiber.Ctx) error {
 		})
 	}
 
-	// 1. Fetch Service Details for all items and calculate total
-	var totalAmount float64
+	// 1. Fetch Service Details for all items and calculate subtotal
+	var itemsSubtotal float64
 	var billItems []dto.HospitalBillItem
 
 	for _, item := range req.Items {
@@ -46,7 +46,7 @@ func CreateHospitalBill(c *fiber.Ctx) error {
 		}
 
 		itemTotal := service.UnitPrice * float64(item.Quantity)
-		totalAmount += itemTotal
+		itemsSubtotal += itemTotal
 
 		billItems = append(billItems, dto.HospitalBillItem{
 			ServiceID:   service.ServiceID,
@@ -56,6 +56,9 @@ func CreateHospitalBill(c *fiber.Ctx) error {
 			Total:       itemTotal,
 		})
 	}
+
+	// Calculate final total amount
+	finalTotal := itemsSubtotal + req.Tax - req.Discount
 
 	// 2. Generate a unique Hospital Bill ID
 	hospitalBillId, err := dao.GenerateId(context.Background(), "hospital_bills", "HB")
@@ -84,10 +87,16 @@ func CreateHospitalBill(c *fiber.Ctx) error {
 		HospitalBillId: hospitalBillId,
 		PatientID:      req.PatientID,
 		PatientName:    pName,
+		PatientPhone:   req.PatientPhone,
+		PatientEmail:   req.PatientEmail,
 		DoctorID:       req.DoctorID,
 		DoctorName:     dName,
+		VisitType:      req.VisitType,
+		VisitDate:      req.VisitDate,
 		Items:          billItems,
-		TotalAmount:    totalAmount,
+		Discount:       req.Discount,
+		Tax:            req.Tax,
+		TotalAmount:    finalTotal,
 		Confirm:        false,
 		CreatedAt:      time.Now(),
 		UpdatedAt:      time.Now(),
