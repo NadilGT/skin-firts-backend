@@ -112,6 +112,8 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 	app.Post("/batches", api.CreateMedicineBatch)
 	app.Get("/batches/medicineId", api.GetBatchesByMedicineID)
 	app.Get("/batches/available/medicineId", api.GetAvailableBatchesFEFO)
+	app.Get("/batches/active-stock/medicineId", api.GetActiveStockByMedicineID)
+
 
 	// ========== BILLING ROUTES ==========
 	app.Post("/billing/deduct", api.DeductStockFEFO)
