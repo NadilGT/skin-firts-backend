@@ -256,6 +256,27 @@ func GetAvailableBatchesFEFO(c *fiber.Ctx) error {
 	})
 }
 
+func GetActiveStockByMedicineID(c *fiber.Ctx) error {
+	id := c.Query("medicineId")
+	if id == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Missing medicineId in query",
+		})
+	}
+
+	totalStock, err := dao.DB_GetActiveStockByMedicineID(id)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to retrieve stock",
+		})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"medicineId":  id,
+		"activeStock": totalStock,
+	})
+}
+
 func DeductStockFEFO(c *fiber.Ctx) error {
 	var req dto.DeductStockRequest
 	if err := c.BodyParser(&req); err != nil {

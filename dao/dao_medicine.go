@@ -210,6 +210,32 @@ func DB_GetAvailableBatchesFEFO(medicineID string) ([]dto.MedicineBatchModel, er
 	return batches, nil
 }
 
+func DB_GetActiveStockByMedicineID(medicineID string) (int, error) {
+	ctx := context.Background()
+	filter := bson.M{
+		"medicineId": medicineID,
+		"status":     "ACTIVE",
+	}
+	
+	cursor, err := dbConfigs.MedicineBatchCollection.Find(ctx, filter)
+	if err != nil {
+		return 0, err
+	}
+	defer cursor.Close(ctx)
+	
+	var batches []dto.MedicineBatchModel
+	if err = cursor.All(ctx, &batches); err != nil {
+		return 0, err
+	}
+	
+	totalStock := 0
+	for _, batch := range batches {
+		totalStock += batch.Quantity
+	}
+	
+	return totalStock, nil
+}
+
 func DB_DeductFromBatchAtomic(batchID primitive.ObjectID, deductAmount int) (int, error) {
 	filter := bson.M{
 		"_id":      batchID,
