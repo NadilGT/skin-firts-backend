@@ -25,7 +25,8 @@ func main() {
 		AllowMethods: "GET, POST, PUT, DELETE, PATCH",
 	}))
 
-	dbConfigs.ConnectMongoDB("mongodb+srv://admin:W6ptbj7HPS3RJ4cU@cluster0.tgypip5.mongodb.net/")
+	dbConfigs.ConnectMongoDB(os.Getenv("MONGODB_URI"))
+
 
 	firebaseApp, err := apiHandlers.InitFirebaseApp()
 	if err != nil {
