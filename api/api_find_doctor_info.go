@@ -23,3 +23,22 @@ func FindDoctorInfoByName(c *fiber.Ctx) error {
 
 	return c.Status(fiber.StatusOK).JSON(info)
 }
+
+func FindDoctorInfoByDoctorId(c *fiber.Ctx) error {
+	doctorID := c.Query("doctor_id")
+	if doctorID == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Doctor ID parameter is required",
+		})
+	}
+
+	info, err := dao.DB_GetDoctorInfoByDoctorId(doctorID)
+	if err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"error": "Doctor info not found",
+		})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(info)
+}
+

@@ -21,3 +21,18 @@ func DB_GetDoctorInfoByName(name string) (*dto.DoctorInfoModel, error) {
 
 	return &info, nil
 }
+
+func DB_GetDoctorInfoByDoctorId(doctorID string) (*dto.DoctorInfoModel, error) {
+	var info dto.DoctorInfoModel
+
+	err := dbConfigs.DoctorInfoCollection.FindOne(
+		context.Background(),
+		map[string]interface{}{"doctor_id": doctorID},
+	).Decode(&info)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &info, nil
+}
