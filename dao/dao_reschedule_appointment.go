@@ -26,11 +26,12 @@ func DB_GetAppointmentByID(id string) (*dto.AppointmentModel, error) {
 }
 
 // Check availability excluding a specific appointment (for rescheduling)
-func DB_RescheduleAppointment(id string, newDate time.Time) error {
+func DB_RescheduleAppointment(id string, newDate time.Time, nextNum int) error {
 	update := bson.M{
 		"$set": bson.M{
-			"appointmentDate": newDate,
-			"updatedAt":       time.Now(),
+			"appointmentDate":   newDate,
+			"appointmentNumber": nextNum,
+			"updatedAt":         time.Now(),
 		},
 	}
 
