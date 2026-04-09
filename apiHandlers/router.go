@@ -70,6 +70,8 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 	app.Get("/doctors/search", api.SearchDoctorInfo)
 	app.Get("/findAll/doctors/focus", api.GetDoctorsByFocus)
 	app.Get("/doctor-info", authMiddleware.ValidateToken, api.FindDoctorInfoByName)
+	app.Get("/doctor-info/id", authMiddleware.ValidateToken, api.FindDoctorInfoByDoctorId)
+	app.Put("/doctor-info/id", authMiddleware.ValidateToken, RequiresRole("admin"), api.UpdateDoctorInfoByDoctorId)
 	app.Post("/doctor-info", authMiddleware.ValidateToken, RequiresRole("admin"), api.CreateDoctorInfo)
 
 	// Public doctor routes
