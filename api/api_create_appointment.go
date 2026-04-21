@@ -12,19 +12,20 @@ import (
 )
 
 // getBranchIdFromContext resolves branchId based on the caller's role:
-//   - PATIENT  → from request body (mobile app selects branch)
-//   - All others (admin, doctor, staff, super_admin) → from JWT token claim
+//   - PATIENT & SUPER_ADMIN → from request body (allows booking for any branch)
+//   - All others (admin, doctor, staff) → from JWT token claim
 func getBranchIdFromContext(c *fiber.Ctx, reqBranchId string) (string, error) {
 	role, _ := c.Locals("role").(string)
 
-	if role == "patient" {
+	// Patients and Super Admins can specify any branch in the request body
+	if role == "patient" || role == "super_admin" {
 		if reqBranchId == "" {
-			return "", fmt.Errorf("branchId is required for patient bookings")
+			return "", fmt.Errorf("branchId is required")
 		}
 		return reqBranchId, nil
 	}
 
-	// Admin / Doctor / Staff / Super Admin — fixed branch from JWT
+	// Regular Admin / Doctor / Staff — fixed branch from JWT
 	branchId, _ := c.Locals("branchId").(string)
 	if branchId == "" {
 		return "", fmt.Errorf("no branchId found in token; please contact your administrator")

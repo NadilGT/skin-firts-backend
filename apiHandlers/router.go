@@ -90,7 +90,7 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 	app.Get("/appointment/next-number/doctorId", api.GetNextAppointmentNumber)
 	app.Get("/appointments/running/doctorId", api.GetRunningAppointmentNumber)
 	app.Patch("/appointments/id/running", api.SetAppointmentRunning)
-	app.Post("/create/appointment", api.CreateAppointment)
+	app.Post("/create/appointment",authMiddleware.ValidateToken, BranchMiddleware,RequiresRole("admin"), api.CreateAppointment)
 	// Branch-scoped: admins see their branch; super_admin sees all
 	app.Get("/findAll/appointments", authMiddleware.ValidateToken, BranchMiddleware, api.GetAllAppointments)
 	app.Get("/findAll/appointments/doctor", authMiddleware.ValidateToken, BranchMiddleware, api.GetAppointmentsByDoctorID)
