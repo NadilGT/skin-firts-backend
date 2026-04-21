@@ -12,9 +12,13 @@ import (
 
 // DB_FindAllAppointments returns a paginated list of all appointments sorted by createdAt desc.
 // page is 1-indexed. Returns the slice, total document count, and any error.
-func DB_FindAllAppointments(page, limit int) ([]dto.AppointmentModel, int64, error) {
+// Pass branchId="" to see all branches (super_admin).
+func DB_FindAllAppointments(branchId string, page, limit int) ([]dto.AppointmentModel, int64, error) {
 	ctx := context.Background()
 	filter := bson.M{}
+	if branchId != "" {
+		filter["branchId"] = branchId
+	}
 
 	total, err := dbConfigs.AppointmentCollection.CountDocuments(ctx, filter)
 	if err != nil {
@@ -50,9 +54,13 @@ func DB_FindAllAppointments(page, limit int) ([]dto.AppointmentModel, int64, err
 }
 
 // DB_FindAppointmentsByDoctorID returns a paginated list of appointments for a specific doctor.
-func DB_FindAppointmentsByDoctorID(doctorID string, page, limit int) ([]dto.AppointmentModel, int64, error) {
+// Pass branchId="" to see all branches (super_admin).
+func DB_FindAppointmentsByDoctorID(doctorID string, branchId string, page, limit int) ([]dto.AppointmentModel, int64, error) {
 	ctx := context.Background()
 	filter := bson.M{"doctorId": doctorID}
+	if branchId != "" {
+		filter["branchId"] = branchId
+	}
 
 	total, err := dbConfigs.AppointmentCollection.CountDocuments(ctx, filter)
 	if err != nil {

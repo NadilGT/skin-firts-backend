@@ -11,6 +11,27 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
+// getBranchIdFromContext resolves branchId based on the caller's role:
+//   - PATIENT  → from request body (mobile app selects branch)
+//   - All others (admin, doctor, staff, super_admin) → from JWT token claim
+func getBranchIdFromContext(c *fiber.Ctx, reqBranchId string) (string, error) {
+	role, _ := c.Locals("role").(string)
+
+	if role == "patient" {
+		if reqBranchId == "" {
+			return "", fmt.Errorf("branchId is required for patient bookings")
+		}
+		return reqBranchId, nil
+	}
+
+	// Admin / Doctor / Staff / Super Admin — fixed branch from JWT
+	branchId, _ := c.Locals("branchId").(string)
+	if branchId == "" {
+		return "", fmt.Errorf("no branchId found in token; please contact your administrator")
+	}
+	return branchId, nil
+}
+
 var dateFormats = []string{
 	time.RFC3339Nano,
 	time.RFC3339,       // 2025-11-18T10:30:00Z
@@ -37,6 +58,46 @@ func CreateAppointment(c *fiber.Ctx) error {
 		})
 	}
 
+	// ── 1. Resolve branchId from context (role-based) ──────────────────────────
+	// PATIENT  → must send branchId in request body (mobile app selects a branch)
+	// Others   → branchId is fixed in their JWT token (admin/doctor/staff)
+	branchId, err := getBranchIdFromContext(c, req.BranchId)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	// ── 2. Validate branch exists ───────────────────────────────────────────────
+	_, err = dao.DB_GetBranchByBranchId(branchId)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Branch not found: " + branchId,
+		})
+	}
+
+	// ── 3. Validate doctor is assigned to this branch ───────────────────────────
+	doctor, err := dao.DB_GetDoctorInfoByDoctorId(req.DoctorID)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Doctor not found: " + req.DoctorID,
+		})
+	}
+
+	doctorInBranch := false
+	for _, bid := range doctor.BranchIds {
+		if bid == branchId {
+			doctorInBranch = true
+			break
+		}
+	}
+	if !doctorInBranch {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+			"error": fmt.Sprintf("Doctor %s is not assigned to branch %s", req.DoctorID, branchId),
+		})
+	}
+
+	// ── 4. Generate appointment ID ──────────────────────────────────────────────
 	id, err := dao.GenerateId(context.Background(), "appointments", "APP")
 	if err != nil {
 		return utils.SendErrorResponse(c, fiber.StatusInternalServerError, err.Error())
@@ -45,7 +106,7 @@ func CreateAppointment(c *fiber.Ctx) error {
 
 	fmt.Println("Incoming appointmentDate:", req.AppointmentDate)
 
-	// Parse flexible date input
+	// ── 5. Parse flexible date input ────────────────────────────────────────────
 	appointmentDate, err := parseFlexibleDate(req.AppointmentDate)
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -60,11 +121,11 @@ func CreateAppointment(c *fiber.Ctx) error {
 		})
 	}
 
-	// 1. Check doctor availability/schedule
+	// ── 6. Check doctor availability/schedule ───────────────────────────────────
 	isAvailable, reason, err := dao.DB_CheckDoctorAvailabilityOnDate(req.DoctorID, appointmentDate)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to check doctor availability",
+			"error":   "Failed to check doctor availability",
 			"details": err.Error(),
 		})
 	}
@@ -81,23 +142,23 @@ func CreateAppointment(c *fiber.Ctx) error {
 		})
 	}
 
-	// Build the model
+	// ── 7. Build and persist the appointment ────────────────────────────────────
 	appointment := dto.AppointmentModel{
 		AppointmentID:     req.AppointmentID,
 		AppointmentNumber: nextNum,
 		PatientID:         req.PatientID,
-		PatientName:     req.PatientName,
-		PatientEmail:    req.PatientEmail,
-		PatientPhone:    req.PatientPhone,
-		DoctorID:        req.DoctorID,
-		DoctorName:      req.DoctorName,
-		DoctorSpecialty: req.DoctorSpecialty,
-		AppointmentDate: appointmentDate,
-		Status:          "pending",
-		Notes:           req.Notes,
+		PatientName:       req.PatientName,
+		PatientEmail:      req.PatientEmail,
+		PatientPhone:      req.PatientPhone,
+		DoctorID:          req.DoctorID,
+		DoctorName:        req.DoctorName,
+		DoctorSpecialty:   req.DoctorSpecialty,
+		AppointmentDate:   appointmentDate,
+		Status:            "pending",
+		Notes:             req.Notes,
+		BranchId:          branchId, // ← enforced by backend, never trusted from frontend
 	}
 
-	// Save to DB
 	if err := dao.DB_CreateAppointment(appointment); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Failed to create appointment",

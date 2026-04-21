@@ -4,9 +4,12 @@ import "time"
 
 // UserRole constants
 const (
-	RolePatient = "patient"
-	RoleDoctor  = "doctor"
-	RoleAdmin   = "admin"
+	RolePatient     = "patient"
+	RoleDoctor      = "doctor"
+	RoleAdmin       = "admin"
+	RoleSuperAdmin  = "super_admin"
+	RolePharmacist  = "pharmacist"
+	RoleReceptionist = "receptionist"
 )
 
 // PatientUser represents a registered patient stored in the "patients" collection.
@@ -30,6 +33,7 @@ type DoctorUser struct {
 	Email       string    `json:"email"       bson:"email"`
 	PhoneNumber string    `json:"phoneNumber" bson:"phoneNumber"`
 	Role        string    `json:"role"        bson:"role"`
+	BranchId    string    `json:"branchId,omitempty" bson:"branchId,omitempty"`
 	CreatedAt   time.Time `json:"createdAt"   bson:"createdAt"`
 }
 
@@ -41,6 +45,7 @@ type AdminUser struct {
 	Email       string    `json:"email"       bson:"email"`
 	PhoneNumber string    `json:"phoneNumber" bson:"phoneNumber"`
 	Role        string    `json:"role"        bson:"role"`
+	BranchId    string    `json:"branchId,omitempty" bson:"branchId,omitempty"`
 	CreatedAt   time.Time `json:"createdAt"   bson:"createdAt"`
 }
 
@@ -52,6 +57,7 @@ type StaffUser struct {
 	Email       string    `json:"email"       bson:"email"`
 	PhoneNumber string    `json:"phoneNumber" bson:"phoneNumber"`
 	Role        string    `json:"role"        bson:"role"`
+	BranchId    string    `json:"branchId,omitempty" bson:"branchId,omitempty"`
 	CreatedAt   time.Time `json:"createdAt"   bson:"createdAt"`
 }
 
@@ -62,6 +68,7 @@ type RegisterUserRequest struct {
 	Name        string `json:"name"`
 	Email       string `json:"email"`
 	PhoneNumber string `json:"phoneNumber"`
+	BranchId    string `json:"branchId,omitempty"`   // optional — required for staff/admin
 }
 
 // SearchStaffQuery represents the query parameters for searching staff.
@@ -80,6 +87,7 @@ type StaffMember struct {
 	Email       string    `json:"email"       bson:"email"`
 	PhoneNumber string    `json:"phoneNumber" bson:"phoneNumber"`
 	Role        string    `json:"role"        bson:"role"`
+	BranchId    string    `json:"branchId,omitempty" bson:"branchId,omitempty"`
 	CreatedAt   time.Time `json:"createdAt"   bson:"createdAt"`
 }
 

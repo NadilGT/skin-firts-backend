@@ -171,6 +171,18 @@ func GetLowStockMedicines(c *fiber.Ctx) error {
 	})
 }
 
+func GetMedicineByBarcode(c *fiber.Ctx) error {
+	barcode := c.Query("barcode")
+	if barcode == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Missing barcode query parameter"})
+	}
+	medicine, err := dao.DB_GetMedicineByBarcode(barcode)
+	if err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Medicine not found for barcode: " + barcode})
+	}
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{"data": medicine})
+}
+
 // Debug endpoint to check what data is being sent
 func DebugMedicineRequest(c *fiber.Ctx) error {
 	body := c.Body()
@@ -321,25 +333,52 @@ func CreateBill(c *fiber.Ctx) error {
 	additionalCharges, _ := strconv.ParseFloat(additionalChargesStr, 64)
 	patientID := c.Query("patientId")
 
+	// Auto-inject branchId from JWT — prevents spoofing
+	if branchId, ok := c.Locals("effectiveBranchId").(string); ok && branchId != "" {
+		req.BranchId = branchId
+	}
+
 	var allBillItems []dto.BillItem
 	var totalMedicinePrice float64
 
 	for _, item := range req.Items {
-		// Just calculate and check stock, don't deduct yet
 		billItems, err := dao.DB_CheckStockAndCalculatePrice(item.MedicineID, item.Quantity)
 		if err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"error": fmt.Sprintf("Failed to prepare bill for medicine %s: %s", item.MedicineID, err.Error()),
 			})
 		}
-
 		for _, bi := range billItems {
 			allBillItems = append(allBillItems, bi)
 			totalMedicinePrice += bi.Price * float64(bi.Quantity)
 		}
 	}
 
-	// Generate a unique Bill ID
+	// Calculate totals
+	grandTotal := totalMedicinePrice + additionalCharges
+	discount := req.Discount
+	tax := req.Tax
+	netTotal := grandTotal - discount + tax
+	if netTotal < 0 {
+		netTotal = 0
+	}
+
+	// Payment calculations
+	paidAmount := req.PaidAmount
+	if paidAmount < 0 {
+		paidAmount = 0
+	}
+	dueAmount := netTotal - paidAmount
+	if dueAmount < 0 {
+		dueAmount = 0
+	}
+	paymentStatus := "PENDING"
+	if paidAmount >= netTotal {
+		paymentStatus = "PAID"
+	} else if paidAmount > 0 {
+		paymentStatus = "PARTIAL"
+	}
+
 	billId, err := dao.GenerateId(context.Background(), "bills", "BIL")
 	if err != nil {
 		return utils.SendErrorResponse(c, fiber.StatusInternalServerError, "Failed to generate bill ID: "+err.Error())
@@ -352,13 +391,24 @@ func CreateBill(c *fiber.Ctx) error {
 		Items:              allBillItems,
 		TotalMedicinePrice: totalMedicinePrice,
 		AdditionalCharges:  additionalCharges,
-		GrandTotal:         totalMedicinePrice + additionalCharges,
+		GrandTotal:         grandTotal,
+		Discount:           discount,
+		Tax:                tax,
+		NetTotal:           netTotal,
+		PaidAmount:         paidAmount,
+		DueAmount:          dueAmount,
+		PaymentStatus:      paymentStatus,
+		PaymentMethod:      req.PaymentMethod,
+		CustomerName:       req.CustomerName,
+		CustomerPhone:      req.CustomerPhone,
+		BranchId:           req.BranchId,
+		Notes:              req.Notes,
+		CreatedBy:          req.CreatedBy,
 		Status:             "PENDING",
 		CreatedAt:          time.Now(),
 		UpdatedAt:          time.Now(),
 	}
 
-	// Save the pending bill to DB
 	if err := dao.DB_CreateBill(bill); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Failed to save pending bill: " + err.Error(),

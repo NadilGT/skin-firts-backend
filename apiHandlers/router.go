@@ -26,7 +26,7 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 	reportHandler := api.NewReportHandler(firebaseApp)
 
 	// Admin-only role management routes
-	app.Post("/admin/create-staff",authMiddleware.ValidateToken, RequiresRole("admin"), staffHandler.CreateStaffAccount)
+	app.Post("/admin/create-staff", authMiddleware.ValidateToken, RequiresRole("admin"), staffHandler.CreateStaffAccount)
 	app.Get("/admin/search-staff", staffHandler.SearchStaff)
 	app.Get("/admin/search-patients", api.SearchPatients)
 
@@ -53,15 +53,18 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 	// Mobile app: checks patients + doctor_users collections.
 	app.Get("/role/mobile", api.FindMobileUserRole)
 
+	// ========== AUTH PROFILE ==========
+	// Returns uid, email, branchId, roles from the JWT — useful for frontend after login.
+	app.Get("/auth/me", authMiddleware.ValidateToken, api.GetMyProfile)
 
 	// ========== FOCUS ROUTES ==========
 	app.Post("/focus", authMiddleware.ValidateToken, api.CreateFocus)
 	app.Get("/findAll/focus", api.GetAllFocuses)
-	
+
 	// ========== SERVICE ROUTES ==========
 	app.Post("/admin/services", api.CreateService)
 	app.Get("/services", api.GetAllServices)
-	app.Put("/admin/services/serviceId",api.UpdateService)
+	app.Put("/admin/services/serviceId", api.UpdateService)
 	app.Delete("/admin/services/serviceId", api.DeleteService)
 
 	// ========== DOCTOR ROUTES ==========
@@ -73,6 +76,8 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 	app.Get("/doctor-info/id", authMiddleware.ValidateToken, api.FindDoctorInfoByDoctorId)
 	app.Put("/doctor-info/id", authMiddleware.ValidateToken, RequiresRole("admin"), api.UpdateDoctorInfoByDoctorId)
 	app.Post("/doctor-info", authMiddleware.ValidateToken, RequiresRole("admin"), api.CreateDoctorInfo)
+	app.Patch("/doctor-info/id/assign-branch", authMiddleware.ValidateToken, BranchMiddleware, RequiresRole("admin"), api.AssignDoctorToBranch)
+	app.Patch("/doctor-info/id/remove-branch", authMiddleware.ValidateToken, BranchMiddleware, RequiresRole("admin"), api.RemoveDoctorFromBranch)
 
 	// Public doctor routes
 	app.Get("/doctor-info/favorite", api.GetFavoriteDoctors)
@@ -86,8 +91,9 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 	app.Get("/appointments/running/doctorId", api.GetRunningAppointmentNumber)
 	app.Patch("/appointments/id/running", api.SetAppointmentRunning)
 	app.Post("/create/appointment", api.CreateAppointment)
-	app.Get("/findAll/appointments", authMiddleware.ValidateToken, api.GetAllAppointments)
-	app.Get("/findAll/appointments/doctor", authMiddleware.ValidateToken, api.GetAppointmentsByDoctorID)
+	// Branch-scoped: admins see their branch; super_admin sees all
+	app.Get("/findAll/appointments", authMiddleware.ValidateToken, BranchMiddleware, api.GetAllAppointments)
+	app.Get("/findAll/appointments/doctor", authMiddleware.ValidateToken, BranchMiddleware, api.GetAppointmentsByDoctorID)
 	app.Get("/findAll/appointments/doctor/ordered", api.GetAppointmentsByDoctorIDSortedByNumber)
 	app.Get("/findAll/appointments/doctor/detailed", api.GetAppointmentsByDoctorDateStatus)
 	app.Get("/findAll/appointments/patient", api.GetAppointmentsByPatientID)
@@ -106,6 +112,7 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 	app.Post("/medicines", api.CreateMedicine)
 	app.Get("/medicines/search", api.SearchMedicines)
 	app.Get("/medicines/low-stock", api.GetLowStockMedicines)
+	app.Get("/medicines/barcode", api.GetMedicineByBarcode)
 	app.Get("/medicines/:id", api.GetMedicineByID)
 	app.Put("/medicines/:id", api.UpdateMedicine)
 	app.Delete("/medicines/:id", api.DeleteMedicine)
@@ -116,16 +123,15 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 	app.Get("/batches/available/medicineId", api.GetAvailableBatchesFEFO)
 	app.Get("/batches/active-stock/medicineId", api.GetActiveStockByMedicineID)
 
-
 	// ========== BILLING ROUTES ==========
-	app.Post("/billing/deduct", api.DeductStockFEFO)
-	app.Post("/billing/create-bill", api.CreateBill)
-	app.Post("/billing/confirm/billId", api.ConfirmBill)
+	app.Post("/billing/deduct", authMiddleware.ValidateToken, BranchMiddleware, api.DeductStockFEFO)
+	app.Post("/billing/create-bill", authMiddleware.ValidateToken, BranchMiddleware, api.CreateBill)
+	app.Post("/billing/confirm/billId", authMiddleware.ValidateToken, BranchMiddleware, api.ConfirmBill)
 	app.Get("/billing/pdf", api.GenerateBillPDF)
 
 	// Hospital Bill Routes
-	app.Post("/billing/hospital-bill", api.CreateHospitalBill)
-	app.Put("/billing/hospital-bill/confirm/:id", api.ConfirmHospitalBill)
+	app.Post("/billing/hospital-bill", authMiddleware.ValidateToken, BranchMiddleware, api.CreateHospitalBill)
+	app.Put("/billing/hospital-bill/confirm/:id", authMiddleware.ValidateToken, BranchMiddleware, api.ConfirmHospitalBill)
 	app.Get("/billing/hospital-bill/:id/pdf", api.DownloadHospitalBillPDF)
 
 	// ========== MEDICINE ORDER ROUTES ==========
@@ -163,4 +169,55 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 	app.Get("/api/notifications", authMiddleware.ValidateToken, api.GetNotifications)
 	app.Patch("/api/notifications/:notificationId/read", authMiddleware.ValidateToken, api.MarkNotificationRead)
 	app.Patch("/api/notifications/read-all", authMiddleware.ValidateToken, api.MarkAllNotificationsRead)
+
+	// ========== BRANCH MANAGEMENT ==========
+	app.Post("/admin/branches", authMiddleware.ValidateToken, api.CreateBranch)
+	app.Get("/branches", api.GetAllBranches)
+	app.Get("/branches/:id", api.GetBranchByID)
+	app.Put("/branches/:id", authMiddleware.ValidateToken, api.UpdateBranch)
+	app.Delete("/branches/:id", authMiddleware.ValidateToken, api.DeleteBranch)
+
+	// ========== SUPPLIER MANAGEMENT (branch-scoped) ==========
+	app.Post("/suppliers", authMiddleware.ValidateToken, BranchMiddleware, api.CreateSupplier)
+	app.Get("/suppliers", authMiddleware.ValidateToken, BranchMiddleware, api.GetSuppliers)
+	app.Get("/suppliers/:id", authMiddleware.ValidateToken, BranchMiddleware, api.GetSupplierByID)
+	app.Put("/suppliers/:id", authMiddleware.ValidateToken, BranchMiddleware, api.UpdateSupplier)
+	app.Delete("/suppliers/:id", authMiddleware.ValidateToken, BranchMiddleware, api.DeleteSupplier)
+
+	// ========== PURCHASE ORDERS (branch-scoped) ==========
+	app.Post("/purchase-orders", authMiddleware.ValidateToken, BranchMiddleware, api.CreatePurchaseOrder)
+	app.Get("/purchase-orders", authMiddleware.ValidateToken, BranchMiddleware, api.GetPurchaseOrders)
+	app.Get("/purchase-orders/:id", authMiddleware.ValidateToken, BranchMiddleware, api.GetPurchaseOrderByID)
+	app.Patch("/purchase-orders/:id/status", authMiddleware.ValidateToken, BranchMiddleware, api.UpdatePurchaseOrderStatus)
+
+	// ========== GRN (branch-scoped) ==========
+	app.Post("/grn", authMiddleware.ValidateToken, BranchMiddleware, api.CreateGRN)
+	app.Get("/grn", authMiddleware.ValidateToken, BranchMiddleware, api.GetGRNs)
+	app.Get("/grn/:id", authMiddleware.ValidateToken, BranchMiddleware, api.GetGRNByID)
+
+	// ========== INVENTORY (branch-scoped) ==========
+	app.Get("/inventory/stock-valuation", authMiddleware.ValidateToken, BranchMiddleware, api.GetStockValuation)
+	app.Get("/inventory/expiry-alerts", authMiddleware.ValidateToken, BranchMiddleware, api.GetExpiryAlerts)
+	app.Get("/inventory/stock-report", authMiddleware.ValidateToken, BranchMiddleware, api.GetInventoryStockReport)
+
+	// ========== STOCK TRANSFERS (branch-scoped) ==========
+	app.Post("/stock-transfers", authMiddleware.ValidateToken, BranchMiddleware, api.CreateStockTransfer)
+	app.Get("/stock-transfers", authMiddleware.ValidateToken, BranchMiddleware, api.GetStockTransfers)
+	app.Patch("/stock-transfers/:id/complete", authMiddleware.ValidateToken, BranchMiddleware, api.CompleteStockTransfer)
+	app.Patch("/stock-transfers/:id/cancel", authMiddleware.ValidateToken, BranchMiddleware, api.CancelStockTransfer)
+
+	// ========== PAYMENT MANAGEMENT (branch-scoped) ==========
+	app.Get("/billing/pharmacy", authMiddleware.ValidateToken, BranchMiddleware, api.GetPharmacyBills)
+	app.Get("/billing/pharmacy/:billId", authMiddleware.ValidateToken, BranchMiddleware, api.GetPharmacyBillByID)
+	app.Patch("/billing/pharmacy/:billId/payment", authMiddleware.ValidateToken, BranchMiddleware, api.UpdatePharmacyBillPayment)
+	app.Get("/payments/daily-summary", authMiddleware.ValidateToken, BranchMiddleware, api.GetDailySalesSummary)
+	app.Get("/payments/revenue", authMiddleware.ValidateToken, BranchMiddleware, api.GetRevenueSummary)
+	app.Get("/payments/pending", authMiddleware.ValidateToken, BranchMiddleware, api.GetPendingPayments)
+
+	// ========== REPORTS & ANALYTICS (branch-scoped) ==========
+	app.Get("/reports/top-selling", authMiddleware.ValidateToken, BranchMiddleware, api.GetTopSellingMedicines)
+	app.Get("/reports/sales", authMiddleware.ValidateToken, BranchMiddleware, api.GetSalesReport)
+	app.Get("/reports/profit-margin", authMiddleware.ValidateToken, BranchMiddleware, api.GetProfitMarginReport)
+	app.Get("/reports/expiry", authMiddleware.ValidateToken, BranchMiddleware, api.GetExpiryReport)
+	app.Get("/reports/stock", authMiddleware.ValidateToken, BranchMiddleware, api.GetStockReportAnalytics)
 }

@@ -94,6 +94,9 @@ func DB_UpdateMedicine(medicine dto.MedicineModel) error {
 			"form":                 medicine.Form,
 			"strength":             medicine.Strength,
 			"minStockLevel":        medicine.MinStockLevel,
+			"barcode":              medicine.Barcode,
+			"supplierId":           medicine.SupplierId,
+			"reorderLevel":         medicine.ReorderLevel,
 			"description":          medicine.Description,
 			"sideEffects":          medicine.SideEffects,
 			"contraindications":    medicine.Contraindications,
@@ -110,6 +113,15 @@ func DB_UpdateMedicine(medicine dto.MedicineModel) error {
 func DB_DeleteMedicine(id primitive.ObjectID) error {
 	_, err := dbConfigs.MedicineCollection.DeleteOne(context.Background(), bson.M{"_id": id})
 	return err
+}
+
+func DB_GetMedicineByBarcode(barcode string) (*dto.MedicineModel, error) {
+	var medicine dto.MedicineModel
+	err := dbConfigs.MedicineCollection.FindOne(context.Background(), bson.M{"barcode": barcode}).Decode(&medicine)
+	if err != nil {
+		return nil, err
+	}
+	return &medicine, nil
 }
 
 func DB_GetLowStockMedicines() ([]dto.MedicineModel, error) {

@@ -11,8 +11,9 @@ import (
 )
 
 type RoleAssignmentRequest struct {
-	Email string   `json:"email"`
-	Roles []string `json:"roles"`
+	Email    string   `json:"email"`
+	Roles    []string `json:"roles"`
+	BranchId string   `json:"branchId"` // required for all roles except super_admin
 }
 
 type RoleAssignmentHandler struct {
@@ -52,9 +53,12 @@ func (h *RoleAssignmentHandler) AssignRoles(c *fiber.Ctx) error {
 		})
 	}
 
-	// Set custom claims (roles)
+	// Set custom claims with roles + branchId
 	claims := map[string]interface{}{
 		"roles": req.Roles,
+	}
+	if req.BranchId != "" {
+		claims["branchId"] = req.BranchId
 	}
 
 	err = client.SetCustomUserClaims(ctx, user.UID, claims)
@@ -64,13 +68,14 @@ func (h *RoleAssignmentHandler) AssignRoles(c *fiber.Ctx) error {
 		})
 	}
 
-	log.Printf("✅ Roles assigned to user %s: %v", req.Email, req.Roles)
+	log.Printf("✅ Roles assigned to user %s: %v | branchId: %s", req.Email, req.Roles, req.BranchId)
 
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
-		"message": "Roles assigned successfully",
-		"email":   req.Email,
-		"roles":   req.Roles,
-		"note":    "User must log out and log back in to get new token with roles",
+		"message":  "Roles assigned successfully",
+		"email":    req.Email,
+		"roles":    req.Roles,
+		"branchId": req.BranchId,
+		"note":     "User must log out and log back in to get new token with updated claims",
 	})
 }
 
@@ -230,8 +235,9 @@ func InitializeSuperAdmin(app *firebase.App) {
 		return
 	}
 
-	// Check if already has super_admin role
+	// Check if already has super_admin role and branchId
 	hasSuperAdmin := false
+	hasBranchId := false
 	if user.CustomClaims != nil {
 		log.Printf("🔍 Current Claims for %s: %v\n", email, user.CustomClaims)
 		if rolesInterface, ok := user.CustomClaims["roles"]; ok {
@@ -244,21 +250,28 @@ func InitializeSuperAdmin(app *firebase.App) {
 				}
 			}
 		}
+		if bid, ok := user.CustomClaims["branchId"].(string); ok && bid == "BRN-001" {
+			hasBranchId = true
+		}
 	} else {
 		log.Printf("🔍 No Custom Claims found for %s\n", email)
 	}
 
-	if hasSuperAdmin {
-		log.Println("✅ Super admin already authorized:", email)
+	if hasSuperAdmin && hasBranchId {
+		log.Println("✅ Super admin already authorized with branch BRN-001:", email)
 		return
 	}
 
-	// Force assign super_admin role
-	log.Printf("⚠️ Adding super_admin role to: %s\n", email)
-	if err := client.SetCustomUserClaims(ctx, user.UID, map[string]interface{}{"roles": []string{"super_admin"}}); err != nil {
-		log.Println("❌ Failed to set super_admin role:", err)
+	// Force assign super_admin role + branchId
+	log.Printf("⚠️ Updating claims (super_admin + BRN-001) for: %s\n", email)
+	newClaims := map[string]interface{}{
+		"roles":    []string{"super_admin"},
+		"branchId": "BRN-001",
+	}
+	if err := client.SetCustomUserClaims(ctx, user.UID, newClaims); err != nil {
+		log.Println("❌ Failed to set super_admin claims:", err)
 		return
 	}
 
-	log.Println("🚀 Super admin initialized successfully:", email)
+	log.Println("🚀 Super admin initialized with branch BRN-001 successfully:", email)
 }

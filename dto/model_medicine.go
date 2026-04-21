@@ -17,6 +17,10 @@ type MedicineModel struct {
 	Form                 string             `json:"form" bson:"form"`
 	Strength             string             `json:"strength" bson:"strength"`
 	MinStockLevel        int                `json:"minStockLevel" bson:"minStockLevel"`
+	// Extended fields
+	Barcode              string             `json:"barcode,omitempty" bson:"barcode,omitempty"`
+	SupplierId           string             `json:"supplierId,omitempty" bson:"supplierId,omitempty"`
+	ReorderLevel         int                `json:"reorderLevel" bson:"reorderLevel"` // alias of minStockLevel for UI clarity
 	Description          string             `json:"description" bson:"description"`
 	SideEffects          []string           `json:"sideEffects,omitempty" bson:"sideEffects,omitempty"`
 	Contraindications    []string           `json:"contraindications,omitempty" bson:"contraindications,omitempty"`
@@ -27,15 +31,21 @@ type MedicineModel struct {
 }
 
 type MedicineBatchModel struct {
-	ID           primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
+	ID              primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
 	MedicineBatchId string             `json:"MedicineBatchId" bson:"medicinebatchid"`
-	MedicineID   string             `json:"medicineId" bson:"medicineId"`
-	Quantity     int                `json:"quantity" bson:"quantity"`
-	ExpiryDate   time.Time          `json:"expiryDate" bson:"expiryDate"`
-	BuyingPrice  float64            `json:"buyingPrice" bson:"buyingPrice"`
-	SellingPrice float64            `json:"sellingPrice" bson:"sellingPrice"`
-	Status       string             `json:"status" bson:"status"` // ACTIVE, OUT_OF_STOCK, EXPIRED
-	CreatedAt    time.Time          `json:"createdAt" bson:"createdAt"`
+	MedicineID      string             `json:"medicineId" bson:"medicineId"`
+	Quantity        int                `json:"quantity" bson:"quantity"`
+	ExpiryDate      time.Time          `json:"expiryDate" bson:"expiryDate"`
+	BuyingPrice     float64            `json:"buyingPrice" bson:"buyingPrice"`
+	SellingPrice    float64            `json:"sellingPrice" bson:"sellingPrice"`
+	Status          string             `json:"status" bson:"status"` // ACTIVE, OUT_OF_STOCK, EXPIRED
+	// Extended fields
+	BatchNumber  string    `json:"batchNumber,omitempty" bson:"batchNumber,omitempty"`
+	SupplierId   string    `json:"supplierId,omitempty" bson:"supplierId,omitempty"`
+	BranchId     string    `json:"branchId,omitempty" bson:"branchId,omitempty"`
+	ReceivedDate time.Time `json:"receivedDate,omitempty" bson:"receivedDate,omitempty"`
+	Notes        string    `json:"notes,omitempty" bson:"notes,omitempty"`
+	CreatedAt    time.Time `json:"createdAt" bson:"createdAt"`
 }
 
 type BillItem struct {
@@ -59,7 +69,17 @@ type SearchMedicineQuery struct {
 	Limit      int    `json:"limit" query:"limit"`
 }
 type CreateBillRequest struct {
-	Items []DeductStockRequest `json:"items"`
+	Items         []DeductStockRequest `json:"items"`
+	CustomerName  string               `json:"customerName"`
+	CustomerPhone string               `json:"customerPhone"`
+	Discount      float64              `json:"discount"`
+	Tax           float64              `json:"tax"`
+	// CASH / CARD / ONLINE
+	PaymentMethod string  `json:"paymentMethod"`
+	PaidAmount    float64 `json:"paidAmount"`
+	BranchId      string  `json:"branchId"`
+	Notes         string  `json:"notes"`
+	CreatedBy     string  `json:"createdBy"`
 }
 
 type BillResponse struct {
@@ -77,6 +97,37 @@ type BillModel struct {
 	AdditionalCharges  float64            `json:"additionalCharges" bson:"additionalCharges"`
 	GrandTotal         float64            `json:"grandTotal" bson:"grandTotal"`
 	Status             string             `json:"status" bson:"status"` // PENDING, CONFIRMED, FAILED
-	CreatedAt          time.Time          `json:"createdAt" bson:"createdAt"`
-	UpdatedAt          time.Time          `json:"updatedAt" bson:"updatedAt"`
+	// Extended POS fields
+	CustomerName  string  `json:"customerName,omitempty" bson:"customerName,omitempty"`
+	CustomerPhone string  `json:"customerPhone,omitempty" bson:"customerPhone,omitempty"`
+	Discount      float64 `json:"discount" bson:"discount"`
+	Tax           float64 `json:"tax" bson:"tax"`
+	NetTotal      float64 `json:"netTotal" bson:"netTotal"`     // grandTotal - discount + tax
+	PaidAmount    float64 `json:"paidAmount" bson:"paidAmount"` // amount actually paid
+	DueAmount     float64 `json:"dueAmount" bson:"dueAmount"`   // netTotal - paidAmount
+	// PAID / PARTIAL / PENDING
+	PaymentStatus string `json:"paymentStatus" bson:"paymentStatus"`
+	// CASH / CARD / ONLINE
+	PaymentMethod string    `json:"paymentMethod,omitempty" bson:"paymentMethod,omitempty"`
+	BranchId      string    `json:"branchId,omitempty" bson:"branchId,omitempty"`
+	Notes         string    `json:"notes,omitempty" bson:"notes,omitempty"`
+	CreatedBy     string    `json:"createdBy,omitempty" bson:"createdBy,omitempty"`
+	CreatedAt     time.Time `json:"createdAt" bson:"createdAt"`
+	UpdatedAt     time.Time `json:"updatedAt" bson:"updatedAt"`
+}
+
+type UpdateBillPaymentRequest struct {
+	PaidAmount    float64 `json:"paidAmount"`
+	PaymentMethod string  `json:"paymentMethod"`
+	Notes         string  `json:"notes"`
+}
+
+type SearchBillQuery struct {
+	BranchId      string `json:"branchId" query:"branchId"`
+	PaymentStatus string `json:"paymentStatus" query:"paymentStatus"`
+	Status        string `json:"status" query:"status"`
+	From          string `json:"from" query:"from"`
+	To            string `json:"to" query:"to"`
+	Page          int    `json:"page" query:"page"`
+	Limit         int    `json:"limit" query:"limit"`
 }

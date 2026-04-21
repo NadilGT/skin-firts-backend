@@ -1,5 +1,7 @@
 package dto
 
+import "time"
+
 type DoctorInfoModel struct {
 	DoctorID   string   `json:"doctor_id" bson:"doctor_id"`
 	Name       string   `json:"name" bson:"name"`
@@ -12,8 +14,12 @@ type DoctorInfoModel struct {
 	Profile    string   `json:"profile" bson:"profile"`
 	Career     string   `json:"career" bson:"career"`
 	Highlights string   `json:"highlights" bson:"highlights"`
-	Favorite   bool     `json:"favorite" bson:"favorite"` 
-	ProfilePic string 	`json:"profile_pic" bson:"profile_pic"`
+	Favorite   bool     `json:"favorite" bson:"favorite"`
+	ProfilePic string   `json:"profile_pic" bson:"profile_pic"`
+	// Multi-branch support: a doctor can work at multiple branches
+	BranchIds  []string  `json:"branchIds,omitempty" bson:"branchIds,omitempty"`
+	Status     string    `json:"status,omitempty" bson:"status,omitempty"` // ACTIVE / INACTIVE
+	UpdatedAt  time.Time `json:"updatedAt,omitempty" bson:"updatedAt,omitempty"`
 }
 
 // SearchDoctorInfoQuery represents the query parameters for searching doctor info.

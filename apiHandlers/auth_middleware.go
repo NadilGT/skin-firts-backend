@@ -50,6 +50,12 @@ func (a *AuthMiddleware) ValidateToken(c *fiber.Ctx) error {
 		c.Locals("email", email)
 	}
 
+	// Extract branchId from token claims (set by AssignRoles)
+	if branchId, ok := token.Claims["branchId"].(string); ok {
+		c.Locals("branchId", branchId)
+	}
+
+	// Extract roles array and also set the primary role
 	if roles, ok := token.Claims["roles"].([]interface{}); ok {
 		var rolesStr []string
 		for _, r := range roles {
@@ -58,9 +64,10 @@ func (a *AuthMiddleware) ValidateToken(c *fiber.Ctx) error {
 			}
 		}
 		c.Locals("roles", rolesStr)
-	} else {
-		// Log if roles are missing from token
-		// log.Printf("[DEBUG] No 'roles' claim found for user: %s", token.UID)
+		// Set first role as the primary role for convenience
+		if len(rolesStr) > 0 {
+			c.Locals("role", rolesStr[0])
+		}
 	}
 
 	return c.Next()

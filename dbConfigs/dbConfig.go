@@ -34,6 +34,13 @@ var StaffUserCollection *mongo.Collection
 var ReportCollection *mongo.Collection
 var ServiceCollection *mongo.Collection
 
+// New pharmacy modules
+var BranchCollection *mongo.Collection
+var SupplierCollection *mongo.Collection
+var PurchaseOrderCollection *mongo.Collection
+var GRNCollection *mongo.Collection
+var StockTransferCollection *mongo.Collection
+
 func ConnectMongoDB(uri string) *mongo.Client {
 	client, err := mongo.NewClient(options.Client().ApplyURI(uri))
 	if err != nil {
@@ -74,6 +81,13 @@ func ConnectMongoDB(uri string) *mongo.Client {
 	ReportCollection = db.Collection("reports")
 	NotificationCollection = db.Collection("notifications")
 	ServiceCollection = db.Collection("services")
+
+	// New pharmacy modules
+	BranchCollection = db.Collection("branches")
+	SupplierCollection = db.Collection("suppliers")
+	PurchaseOrderCollection = db.Collection("purchase_orders")
+	GRNCollection = db.Collection("grn")
+	StockTransferCollection = db.Collection("stock_transfers")
 
 	return client
 }

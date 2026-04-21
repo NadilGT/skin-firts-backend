@@ -30,8 +30,10 @@ func parsePagination(c *fiber.Ctx) (int, int) {
 // GET /findAll/appointments?page=1&limit=10
 func GetAllAppointments(c *fiber.Ctx) error {
 	page, limit := parsePagination(c)
+	// branchId is empty for super_admin (sees all), set for everyone else
+	branchId, _ := c.Locals("effectiveBranchId").(string)
 
-	appointments, total, err := dao.DB_FindAllAppointments(page, limit)
+	appointments, total, err := dao.DB_FindAllAppointments(branchId, page, limit)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Failed to fetch appointments",
@@ -63,8 +65,9 @@ func GetAppointmentsByDoctorID(c *fiber.Ctx) error {
 	}
 
 	page, limit := parsePagination(c)
+	branchId, _ := c.Locals("effectiveBranchId").(string)
 
-	appointments, total, err := dao.DB_FindAppointmentsByDoctorID(doctorID, page, limit)
+	appointments, total, err := dao.DB_FindAppointmentsByDoctorID(doctorID, branchId, page, limit)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Failed to fetch appointments for this doctor",
