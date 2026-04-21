@@ -19,6 +19,7 @@ type CreateStaffRequest struct {
 	Email       string `json:"email"`
 	PhoneNumber string `json:"phoneNumber"`
 	Role        string `json:"role"` // "admin", "doctor", "cashier", "receptionist", etc.
+	BranchId    string `json:"branchId"`
 }
 
 type StaffHandler struct {
@@ -69,10 +70,14 @@ func (h *StaffHandler) CreateStaffAccount(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": fmt.Sprintf("Failed to create Firebase Auth user: %v", err)})
 	}
 
-	// 2. Assign Custom Claims (Roles)
+	// 2. Assign Custom Claims (Role and BranchId)
 	claims := map[string]interface{}{
 		"roles": []string{req.Role},
 	}
+	if req.BranchId != "" {
+		claims["branchId"] = req.BranchId
+	}
+
 	if err := client.SetCustomUserClaims(ctx, fwUser.UID, claims); err != nil {
 		// Rollback Auth user creation if we can't set claims
 		_ = client.DeleteUser(ctx, fwUser.UID)
@@ -123,6 +128,7 @@ func (h *StaffHandler) CreateStaffAccount(c *fiber.Ctx) error {
 				Email:       req.Email,
 				PhoneNumber: req.PhoneNumber,
 				Role:        req.Role,
+				BranchId:    req.BranchId,
 				CreatedAt:   time.Now(),
 			}
 			dbErr = dao.DB_CreateAdminUser(admin)
@@ -138,6 +144,7 @@ func (h *StaffHandler) CreateStaffAccount(c *fiber.Ctx) error {
 				Email:       req.Email,
 				PhoneNumber: req.PhoneNumber,
 				Role:        req.Role,
+				BranchId:    req.BranchId,
 				CreatedAt:   time.Now(),
 			}
 			dbErr = dao.DB_CreateDoctorUser(doctor)
@@ -153,6 +160,7 @@ func (h *StaffHandler) CreateStaffAccount(c *fiber.Ctx) error {
 				Email:       req.Email,
 				PhoneNumber: req.PhoneNumber,
 				Role:        req.Role,
+				BranchId:    req.BranchId,
 				CreatedAt:   time.Now(),
 			}
 			dbErr = dao.DB_CreateStaffUser(staff)
