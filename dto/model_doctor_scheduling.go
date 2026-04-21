@@ -9,6 +9,7 @@ type DoctorWeeklySchedule struct {
 	DaysOfWeek        []int   `json:"daysOfWeek" bson:"daysOfWeek" binding:"required"`
 	DefaultStartTime  *string `json:"defaultStartTime,omitempty" bson:"defaultStartTime,omitempty"`
 	IsActive          bool    `json:"isActive" bson:"isActive"`
+	BranchId          string  `json:"branchId" bson:"branchId"`
 }
 
 type DoctorAvailability struct {
@@ -20,6 +21,7 @@ type DoctorAvailability struct {
 	EstimatedStartTime *string   `json:"estimatedStartTime,omitempty" bson:"estimatedStartTime,omitempty"`
 	MaxPatients        *int      `json:"maxPatients,omitempty" bson:"maxPatients,omitempty"`
 	Notes              *string   `json:"notes,omitempty" bson:"notes,omitempty"`
+	BranchId           string    `json:"branchId" bson:"branchId"`
 	CreatedAt          time.Time `json:"createdAt" bson:"createdAt"`
 	UpdatedAt          time.Time `json:"updatedAt" bson:"updatedAt"`
 }

@@ -101,12 +101,12 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 	app.Put("/appointments/id/reschedule", appointmentStatusHandler.RescheduleAppointment)
 	app.Patch("/appointments/id/status", appointmentStatusHandler.UpdateAppointmentStatus)
 
-	// ========== DOCTOR SCHEDULE ROUTES ==========
-	app.Post("/doctor-schedule", api.CreateDoctorSchedule)
-	app.Get("/doctor-schedule", api.GetDoctorSchedule)
-	app.Get("/doctor-schedule/range", api.GetDoctorScheduleByDateRange)
-	app.Delete("/doctor-schedule", api.DeleteDoctorSchedule)
-	app.Delete("/doctor-schedule/time-slot", api.DeleteTimeSlotFromSchedule)
+	// ========== DOCTOR SCHEDULE ROUTES (Legacy) ==========
+	app.Post("/doctor-schedule", authMiddleware.ValidateToken, BranchMiddleware, api.CreateDoctorSchedule)
+	app.Get("/doctor-schedule", authMiddleware.ValidateToken, BranchMiddleware, api.GetDoctorSchedule)
+	app.Get("/doctor-schedule/range", authMiddleware.ValidateToken, BranchMiddleware, api.GetDoctorScheduleByDateRange)
+	app.Delete("/doctor-schedule", authMiddleware.ValidateToken, BranchMiddleware, api.DeleteDoctorSchedule)
+	app.Delete("/doctor-schedule/time-slot", authMiddleware.ValidateToken, BranchMiddleware, api.DeleteTimeSlotFromSchedule)
 
 	// ========== MEDICINE ROUTES ==========
 	app.Post("/medicines", api.CreateMedicine)
@@ -142,18 +142,18 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 
 	// ========== NEW DOCTOR SCHEDULING ROUTES ==========
 	// Doctor Weekly Schedule
-	app.Post("/doctor-weekly-schedule", api.CreateDoctorWeeklySchedule)
-	app.Put("/doctor-weekly-schedule/doctorId", api.UpdateDoctorWeeklySchedule)
-	app.Delete("/doctor-weekly-schedule/doctorId", api.DeleteDoctorWeeklySchedule)
-	app.Get("/doctor-weekly-schedule", api.GetAllDoctorWeeklySchedules)
-	app.Get("/doctor-weekly-schedule/available-dates", api.GetDoctorAvailableDatesForWeek)
+	app.Post("/doctor-weekly-schedule", authMiddleware.ValidateToken, BranchMiddleware, api.CreateDoctorWeeklySchedule)
+	app.Put("/doctor-weekly-schedule/doctorId", authMiddleware.ValidateToken, BranchMiddleware, api.UpdateDoctorWeeklySchedule)
+	app.Delete("/doctor-weekly-schedule/doctorId", authMiddleware.ValidateToken, BranchMiddleware, api.DeleteDoctorWeeklySchedule)
+	app.Get("/doctor-weekly-schedule", authMiddleware.ValidateToken, BranchMiddleware, api.GetAllDoctorWeeklySchedules)
+	app.Get("/doctor-weekly-schedule/available-dates", api.GetDoctorAvailableDatesForWeek) // Publicly accessible
 
 	// Doctor Availability
-	app.Post("/doctor-availability", api.CreateDoctorAvailability)
-	app.Put("/doctor-availability/doctorAvailabilityId", api.UpdateDoctorAvailability)
-	app.Delete("/doctor-availability/doctorAvailabilityId", api.DeleteDoctorAvailability)
-	app.Get("/doctor-availability", api.GetAllDoctorAvailabilities)
-	app.Get("/doctor-availability/check", api.CheckDoctorAvailability)
+	app.Post("/doctor-availability", authMiddleware.ValidateToken, BranchMiddleware, api.CreateDoctorAvailability)
+	app.Put("/doctor-availability/doctorAvailabilityId", authMiddleware.ValidateToken, BranchMiddleware, api.UpdateDoctorAvailability)
+	app.Delete("/doctor-availability/doctorAvailabilityId", authMiddleware.ValidateToken, BranchMiddleware, api.DeleteDoctorAvailability)
+	app.Get("/doctor-availability", authMiddleware.ValidateToken, BranchMiddleware, api.GetAllDoctorAvailabilities)
+	app.Get("/doctor-availability/check", api.CheckDoctorAvailability) // Publicly accessible
 
 	// ========== REPORT ROUTES ==========
 	app.Post("/api/reports/upload", reportHandler.UploadReport)

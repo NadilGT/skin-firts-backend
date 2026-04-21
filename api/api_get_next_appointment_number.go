@@ -28,7 +28,17 @@ func GetNextAppointmentNumber(c *fiber.Ctx) error {
 		})
 	}
 
-	nextNum, err := dao.DB_GetNextAppointmentNumber(doctorID, date)
+	branchId := GetBranchId(c)
+	if branchId == "" {
+		branchId = c.Query("branchId")
+	}
+	if branchId == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "branchId is required",
+		})
+	}
+
+	nextNum, err := dao.DB_GetNextAppointmentNumber(doctorID, branchId, date)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Failed to get next appointment number",

@@ -8,12 +8,14 @@ type DoctorScheduleModel struct {
 	TimeSlots  []string  `json:"timeSlots" bson:"timeSlots"`
 	CreatedAt  time.Time `json:"createdAt" bson:"createdAt"`
 	UpdatedAt  time.Time `json:"updatedAt" bson:"updatedAt"`
+	BranchId   string    `json:"branchId" bson:"branchId"`
 }
 
 type CreateDoctorScheduleRequest struct {
 	DoctorName string    `json:"doctorName" binding:"required"`
 	Date       time.Time `json:"date" binding:"required"`
 	TimeSlots  []string  `json:"timeSlots" binding:"required"`
+	BranchId   string    `json:"branchId"`
 }
 
 

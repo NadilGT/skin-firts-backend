@@ -17,7 +17,7 @@ func DB_CreateAppointment(appointment dto.AppointmentModel) error {
 	return err
 }
 
-func DB_GetNextAppointmentNumber(doctorID string, date time.Time) (int, error) {
+func DB_GetNextAppointmentNumber(doctorID string, branchId string, date time.Time) (int, error) {
 	startOfDay := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, date.Location())
 	endOfDay := startOfDay.Add(24 * time.Hour)
 
@@ -25,6 +25,7 @@ func DB_GetNextAppointmentNumber(doctorID string, date time.Time) (int, error) {
 		context.Background(),
 		bson.M{
 			"doctorId": doctorID,
+			"branchId": branchId,
 			"appointmentDate": bson.M{
 				"$gte": startOfDay,
 				"$lt":  endOfDay,

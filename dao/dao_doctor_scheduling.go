@@ -21,8 +21,8 @@ func DB_CreateDoctorWeeklySchedule(schedule dto.DoctorWeeklySchedule) (string, e
 	return result.InsertedID.(primitive.ObjectID).Hex(), nil
 }
 
-func DB_UpdateDoctorWeeklySchedule(id string, schedule dto.DoctorWeeklySchedule) error {
-	filter := bson.M{"doctorId": id}
+func DB_UpdateDoctorWeeklySchedule(id string, branchId string, schedule dto.DoctorWeeklySchedule) error {
+	filter := bson.M{"doctorId": id, "branchId": branchId}
 	update := bson.M{
 		"$set": bson.M{
 			"daysOfWeek":       schedule.DaysOfWeek,
@@ -40,8 +40,8 @@ func DB_UpdateDoctorWeeklySchedule(id string, schedule dto.DoctorWeeklySchedule)
 	return nil
 }
 
-func DB_DeleteDoctorWeeklySchedule(id string) error {
-	result, err := dbConfigs.DoctorWeeklyScheduleCollection.DeleteOne(context.Background(), bson.M{"doctorId": id})
+func DB_DeleteDoctorWeeklySchedule(id string, branchId string) error {
+	result, err := dbConfigs.DoctorWeeklyScheduleCollection.DeleteOne(context.Background(), bson.M{"doctorId": id, "branchId": branchId})
 	if err != nil {
 		return err
 	}
@@ -51,10 +51,13 @@ func DB_DeleteDoctorWeeklySchedule(id string) error {
 	return nil
 }
 
-func DB_FindAllDoctorWeeklySchedules(doctorID string) ([]dto.DoctorWeeklySchedule, error) {
+func DB_FindAllDoctorWeeklySchedules(doctorID string, branchId string) ([]dto.DoctorWeeklySchedule, error) {
 	filter := bson.M{}
 	if doctorID != "" {
 		filter["doctorId"] = doctorID
+	}
+	if branchId != "" {
+		filter["branchId"] = branchId
 	}
 	cursor, err := dbConfigs.DoctorWeeklyScheduleCollection.Find(context.Background(), filter)
 	if err != nil {
@@ -115,10 +118,13 @@ func DB_DeleteDoctorAvailability(id string) error {
 	return nil
 }
 
-func DB_FindAllDoctorAvailabilities(doctorID string) ([]dto.DoctorAvailability, error) {
+func DB_FindAllDoctorAvailabilities(doctorID string, branchId string) ([]dto.DoctorAvailability, error) {
 	filter := bson.M{}
 	if doctorID != "" {
 		filter["doctorId"] = doctorID
+	}
+	if branchId != "" {
+		filter["branchId"] = branchId
 	}
 	cursor, err := dbConfigs.DoctorAvailabilityCollection.Find(context.Background(), filter)
 	if err != nil {
@@ -133,7 +139,7 @@ func DB_FindAllDoctorAvailabilities(doctorID string) ([]dto.DoctorAvailability, 
 	return availabilities, nil
 }
 
-func DB_CheckDoctorAvailabilityOnDate(doctorID string, date time.Time) (bool, string, error) {
+func DB_CheckDoctorAvailabilityOnDate(doctorID string, branchId string, date time.Time) (bool, string, error) {
 	dateStr := date.Format("2006-01-02")
 	dayOfWeek := int(date.Weekday())
 
@@ -141,6 +147,7 @@ func DB_CheckDoctorAvailabilityOnDate(doctorID string, date time.Time) (bool, st
 	var availability dto.DoctorAvailability
 	err := dbConfigs.DoctorAvailabilityCollection.FindOne(context.Background(), bson.M{
 		"doctorId": doctorID,
+		"branchId": branchId,
 		"date":     dateStr,
 	}).Decode(&availability)
 
@@ -154,6 +161,7 @@ func DB_CheckDoctorAvailabilityOnDate(doctorID string, date time.Time) (bool, st
 			endOfDay := startOfDay.Add(24 * time.Hour)
 			count, err := dbConfigs.AppointmentCollection.CountDocuments(context.Background(), bson.M{
 				"doctorId": doctorID,
+				"branchId": branchId,
 				"appointmentDate": bson.M{
 					"$gte": startOfDay,
 					"$lt":  endOfDay,
@@ -170,6 +178,7 @@ func DB_CheckDoctorAvailabilityOnDate(doctorID string, date time.Time) (bool, st
 	// 2. No specific override, check weekly schedule
 	cursor, err := dbConfigs.DoctorWeeklyScheduleCollection.Find(context.Background(), bson.M{
 		"doctorId": doctorID,
+		"branchId": branchId,
 		"isActive": true,
 	})
 	if err != nil {
@@ -193,10 +202,11 @@ func DB_CheckDoctorAvailabilityOnDate(doctorID string, date time.Time) (bool, st
 	return false, "Doctor does not have a schedule for this day of the week", nil
 }
 
-func DB_FindDoctorAvailabilityByDate(doctorID string, date string) (*dto.DoctorAvailability, error) {
+func DB_FindDoctorAvailabilityByDate(doctorID string, branchId string, date string) (*dto.DoctorAvailability, error) {
 	var availability dto.DoctorAvailability
 	err := dbConfigs.DoctorAvailabilityCollection.FindOne(context.Background(), bson.M{
 		"doctorId": doctorID,
+		"branchId": branchId,
 		"date":     date,
 	}).Decode(&availability)
 

@@ -15,6 +15,17 @@ func CreateDoctorWeeklySchedule(c *fiber.Ctx) error {
 	if err := c.BodyParser(&schedule); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
 	}
+
+	// Resolve branchId
+	branchId := GetBranchId(c)
+	if branchId == "" && schedule.BranchId != "" {
+		branchId = schedule.BranchId // fallback for super_admin
+	}
+	if branchId == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "branchId is required"})
+	}
+	schedule.BranchId = branchId
+
 	DoctorWeeklyScheduleID, err := dao.GenerateId(context.Background(), "doctorWeeklySchedules", "DWS")
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -32,11 +43,16 @@ func CreateDoctorWeeklySchedule(c *fiber.Ctx) error {
 
 func UpdateDoctorWeeklySchedule(c *fiber.Ctx) error {
 	id := c.Query("doctorId")
+	branchId := GetBranchId(c)
+	if branchId == "" {
+		branchId = c.Query("branchId")
+	}
+
 	var schedule dto.DoctorWeeklySchedule
 	if err := c.BodyParser(&schedule); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
 	}
-	if err := dao.DB_UpdateDoctorWeeklySchedule(id, schedule); err != nil {
+	if err := dao.DB_UpdateDoctorWeeklySchedule(id, branchId, schedule); err != nil {
 		if err == mongo.ErrNoDocuments {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Schedule not found for this doctor"})
 		}
@@ -47,7 +63,12 @@ func UpdateDoctorWeeklySchedule(c *fiber.Ctx) error {
 
 func DeleteDoctorWeeklySchedule(c *fiber.Ctx) error {
 	id := c.Query("doctorId")
-	if err := dao.DB_DeleteDoctorWeeklySchedule(id); err != nil {
+	branchId := GetBranchId(c)
+	if branchId == "" {
+		branchId = c.Query("branchId")
+	}
+
+	if err := dao.DB_DeleteDoctorWeeklySchedule(id, branchId); err != nil {
 		if err == mongo.ErrNoDocuments {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Schedule not found for this doctor"})
 		}
@@ -58,7 +79,12 @@ func DeleteDoctorWeeklySchedule(c *fiber.Ctx) error {
 
 func GetAllDoctorWeeklySchedules(c *fiber.Ctx) error {
 	doctorID := c.Query("doctorId")
-	schedules, err := dao.DB_FindAllDoctorWeeklySchedules(doctorID)
+	branchId := GetBranchId(c)
+	if branchId == "" {
+		branchId = c.Query("branchId")
+	}
+
+	schedules, err := dao.DB_FindAllDoctorWeeklySchedules(doctorID, branchId)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch schedules"})
 	}
@@ -72,6 +98,17 @@ func CreateDoctorAvailability(c *fiber.Ctx) error {
 	if err := c.BodyParser(&availability); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
 	}
+
+	// Resolve branchId
+	branchId := GetBranchId(c)
+	if branchId == "" && availability.BranchId != "" {
+		branchId = availability.BranchId
+	}
+	if branchId == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "branchId is required"})
+	}
+	availability.BranchId = branchId
+
 	DoctorAvailabilityID, err := dao.GenerateId(context.Background(), "doctorAvailabilities", "DA")
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -115,7 +152,12 @@ func DeleteDoctorAvailability(c *fiber.Ctx) error {
 
 func GetAllDoctorAvailabilities(c *fiber.Ctx) error {
 	doctorID := c.Query("doctorId")
-	availabilities, err := dao.DB_FindAllDoctorAvailabilities(doctorID)
+	branchId := GetBranchId(c)
+	if branchId == "" {
+		branchId = c.Query("branchId")
+	}
+
+	availabilities, err := dao.DB_FindAllDoctorAvailabilities(doctorID, branchId)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch availabilities"})
 	}
@@ -128,8 +170,13 @@ func GetDoctorAvailableDatesForWeek(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Doctor ID is required"})
 	}
 
-	// 1. Fetch DoctorWeeklySchedule from MongoDB using doctorId and isActive = true
-	schedules, err := dao.DB_FindAllDoctorWeeklySchedules(doctorID)
+	// 1. Fetch DoctorWeeklySchedule from MongoDB using doctorId, branchId and isActive = true
+	branchId := GetBranchId(c)
+	if branchId == "" {
+		branchId = c.Query("branchId")
+	}
+
+	schedules, err := dao.DB_FindAllDoctorWeeklySchedules(doctorID, branchId)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch schedules"})
 	}
@@ -167,7 +214,7 @@ func GetDoctorAvailableDatesForWeek(c *fiber.Ctx) error {
 
 		// 5. If dayOfWeek exists in schedule.daysOfWeek AND the doctor is actually available on that date
 		if startTime, ok := availableDays[dayOfWeek]; ok {
-			isAvailable, _, err := dao.DB_CheckDoctorAvailabilityOnDate(doctorID, date)
+			isAvailable, _, err := dao.DB_CheckDoctorAvailabilityOnDate(doctorID, branchId, date)
 			if err == nil && isAvailable {
 				availableDates = append(availableDates, dto.AvailableDate{
 					Date:             date.Format("2006-01-02"),
@@ -178,11 +225,11 @@ func GetDoctorAvailableDatesForWeek(c *fiber.Ctx) error {
 			}
 		} else {
 			// Check if there is an availability override that marks them as available
-			isAvailable, _, err := dao.DB_CheckDoctorAvailabilityOnDate(doctorID, date)
+			isAvailable, _, err := dao.DB_CheckDoctorAvailabilityOnDate(doctorID, branchId, date)
 			if err == nil && isAvailable {
 				// Try to get specific start time if override exists
 				var overrideStartTime *string
-				availability, _ := dao.DB_FindDoctorAvailabilityByDate(doctorID, date.Format("2006-01-02"))
+				availability, _ := dao.DB_FindDoctorAvailabilityByDate(doctorID, branchId, date.Format("2006-01-02"))
 				if availability != nil {
 					overrideStartTime = availability.EstimatedStartTime
 				}
@@ -206,9 +253,13 @@ func GetDoctorAvailableDatesForWeek(c *fiber.Ctx) error {
 func CheckDoctorAvailability(c *fiber.Ctx) error {
 	doctorID := c.Query("doctorId")
 	dateStr := c.Query("date")
+	branchId := GetBranchId(c)
+	if branchId == "" {
+		branchId = c.Query("branchId")
+	}
 
-	if doctorID == "" || dateStr == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Doctor ID and date are required"})
+	if doctorID == "" || dateStr == "" || branchId == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Doctor ID, date, and branchId are required"})
 	}
 
 	date, err := time.Parse("2006-01-02", dateStr)
@@ -217,7 +268,7 @@ func CheckDoctorAvailability(c *fiber.Ctx) error {
 	}
 
 	// 1. Try to find a specific override record
-	availability, err := dao.DB_FindDoctorAvailabilityByDate(doctorID, dateStr)
+	availability, err := dao.DB_FindDoctorAvailabilityByDate(doctorID, branchId, dateStr)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch availability override"})
 	}
@@ -227,7 +278,7 @@ func CheckDoctorAvailability(c *fiber.Ctx) error {
 	}
 
 	// 2. If no override, check weekly schedule and return a virtual record
-	isAvailable, message, err := dao.DB_CheckDoctorAvailabilityOnDate(doctorID, date)
+	isAvailable, message, err := dao.DB_CheckDoctorAvailabilityOnDate(doctorID, branchId, date)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to check weekly schedule"})
 	}
@@ -235,7 +286,7 @@ func CheckDoctorAvailability(c *fiber.Ctx) error {
 	// Try to get defaultStartTime from weekly schedule if available
 	var defaultStartTime *string
 	dayOfWeek := int(date.Weekday())
-	schedules, err := dao.DB_FindAllDoctorWeeklySchedules(doctorID)
+	schedules, err := dao.DB_FindAllDoctorWeeklySchedules(doctorID, branchId)
 	if err == nil {
 		for _, s := range schedules {
 			if s.IsActive {

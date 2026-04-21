@@ -14,6 +14,7 @@ import (
 func DB_CreateOrUpdateDoctorSchedule(schedule dto.DoctorScheduleModel) error {
 	filter := bson.M{
 		"doctorName": schedule.DoctorName,
+		"branchId":   schedule.BranchId,
 		"date":       schedule.Date,
 	}
 
@@ -23,6 +24,7 @@ func DB_CreateOrUpdateDoctorSchedule(schedule dto.DoctorScheduleModel) error {
 		},
 		"$set": bson.M{
 			"doctorName": schedule.DoctorName,
+			"branchId":   schedule.BranchId,
 			"date":       schedule.Date,
 			"updatedAt":  time.Now(),
 		},
@@ -43,9 +45,9 @@ func DB_CreateOrUpdateDoctorSchedule(schedule dto.DoctorScheduleModel) error {
 	return err
 }
 
-// DB_GetDoctorSchedule retrieves all schedules for a specific doctor
-func DB_GetDoctorSchedule(doctorName string) ([]dto.DoctorScheduleModel, error) {
-	filter := bson.M{"doctorName": doctorName}
+// DB_GetDoctorSchedule retrieves all schedules for a specific doctor at a branch
+func DB_GetDoctorSchedule(doctorName string, branchId string) ([]dto.DoctorScheduleModel, error) {
+	filter := bson.M{"doctorName": doctorName, "branchId": branchId}
 
 	// Sort by date ascending
 	opts := options.Find().SetSort(bson.D{{Key: "date", Value: 1}})
@@ -64,10 +66,11 @@ func DB_GetDoctorSchedule(doctorName string) ([]dto.DoctorScheduleModel, error) 
 	return schedules, nil
 }
 
-// DB_GetDoctorScheduleByDateRange retrieves schedules for a doctor within a date range
-func DB_GetDoctorScheduleByDateRange(doctorName string, startDate, endDate time.Time) ([]dto.DoctorScheduleModel, error) {
+// DB_GetDoctorScheduleByDateRange retrieves schedules for a doctor within a date range at a branch
+func DB_GetDoctorScheduleByDateRange(doctorName string, branchId string, startDate, endDate time.Time) ([]dto.DoctorScheduleModel, error) {
 	filter := bson.M{
 		"doctorName": doctorName,
+		"branchId":   branchId,
 		"date": bson.M{
 			"$gte": startDate,
 			"$lte": endDate,
@@ -90,9 +93,10 @@ func DB_GetDoctorScheduleByDateRange(doctorName string, startDate, endDate time.
 	return schedules, nil
 }
 
-func DB_DeleteDoctorSchedule(doctorName string, date time.Time) error {
+func DB_DeleteDoctorSchedule(doctorName string, branchId string, date time.Time) error {
 	filter := bson.M{
 		"doctorName": doctorName,
+		"branchId":   branchId,
 		"date":       date,
 	}
 
@@ -100,10 +104,11 @@ func DB_DeleteDoctorSchedule(doctorName string, date time.Time) error {
 	return err
 }
 
-// DB_DeleteTimeSlotFromSchedule removes a specific time slot from a doctor's schedule
-func DB_DeleteTimeSlotFromSchedule(doctorName string, date time.Time, timeSlot string) error {
+// DB_DeleteTimeSlotFromSchedule removes a specific time slot from a doctor's schedule at a branch
+func DB_DeleteTimeSlotFromSchedule(doctorName string, branchId string, date time.Time, timeSlot string) error {
 	filter := bson.M{
 		"doctorName": doctorName,
+		"branchId":   branchId,
 		"date":       date,
 	}
 

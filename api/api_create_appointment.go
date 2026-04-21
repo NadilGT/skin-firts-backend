@@ -123,7 +123,7 @@ func CreateAppointment(c *fiber.Ctx) error {
 	}
 
 	// ── 6. Check doctor availability/schedule ───────────────────────────────────
-	isAvailable, reason, err := dao.DB_CheckDoctorAvailabilityOnDate(req.DoctorID, appointmentDate)
+	isAvailable, reason, err := dao.DB_CheckDoctorAvailabilityOnDate(req.DoctorID, branchId, appointmentDate)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error":   "Failed to check doctor availability",
@@ -136,7 +136,7 @@ func CreateAppointment(c *fiber.Ctx) error {
 		})
 	}
 
-	nextNum, err := dao.DB_GetNextAppointmentNumber(req.DoctorID, appointmentDate)
+	nextNum, err := dao.DB_GetNextAppointmentNumber(req.DoctorID, branchId, appointmentDate)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Failed to generate appointment number",

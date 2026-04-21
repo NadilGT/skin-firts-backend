@@ -59,7 +59,7 @@ func (h *AppointmentStatusHandler) RescheduleAppointment(c *fiber.Ctx) error {
 	}
 
 	// Check if the doctor is available on the new date
-	isAvailable, reason, err := dao.DB_CheckDoctorAvailabilityOnDate(existingAppointment.DoctorID, newDate)
+	isAvailable, reason, err := dao.DB_CheckDoctorAvailabilityOnDate(existingAppointment.DoctorID, existingAppointment.BranchId, newDate)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error":   "Failed to check doctor availability",
@@ -73,7 +73,7 @@ func (h *AppointmentStatusHandler) RescheduleAppointment(c *fiber.Ctx) error {
 	}
 
 	// Get the next appointment number for the rescheduled date
-	nextNum, err := dao.DB_GetNextAppointmentNumber(existingAppointment.DoctorID, newDate)
+	nextNum, err := dao.DB_GetNextAppointmentNumber(existingAppointment.DoctorID, existingAppointment.BranchId, newDate)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Failed to generate appointment number",
