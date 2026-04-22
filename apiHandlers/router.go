@@ -126,7 +126,8 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 	// ========== BILLING ROUTES ==========
 	app.Post("/billing/deduct", authMiddleware.ValidateToken, BranchMiddleware, api.DeductStockFEFO)
 	app.Post("/billing/create-bill", authMiddleware.ValidateToken, BranchMiddleware, api.CreateBill)
-	app.Post("/billing/confirm/billId", authMiddleware.ValidateToken, BranchMiddleware, api.ConfirmBill)
+	app.Post("/billing/cancel-bill", authMiddleware.ValidateToken, BranchMiddleware, api.CancelBill)
+	app.Post("/billing/confirm/:billId", authMiddleware.ValidateToken, BranchMiddleware, api.ConfirmBill)
 	app.Get("/billing/pdf", api.GenerateBillPDF)
 
 	// Hospital Bill Routes
@@ -232,6 +233,12 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 	app.Get("/reject-stock/:id", authMiddleware.ValidateToken, BranchMiddleware, api.GetRejectStockByID)
 	app.Patch("/reject-stock/:id/approve", authMiddleware.ValidateToken, BranchMiddleware, RequiresRole("admin"), api.ApproveRejectStock)
 	app.Patch("/reject-stock/:id/execute", authMiddleware.ValidateToken, BranchMiddleware, RequiresRole("admin"), api.ExecuteRejectStock)
+
+	// ========== STOCK ADJUSTMENTS (manual corrections) ==========
+	app.Post("/stock-adjustments", authMiddleware.ValidateToken, BranchMiddleware, api.CreateStockAdjustment)
+	app.Get("/stock-adjustments", authMiddleware.ValidateToken, BranchMiddleware, api.GetStockAdjustments)
+	app.Patch("/stock-adjustments/:id/approve", authMiddleware.ValidateToken, BranchMiddleware, RequiresRole("admin"), api.ApproveStockAdjustment)
+	app.Patch("/stock-adjustments/:id/execute", authMiddleware.ValidateToken, BranchMiddleware, RequiresRole("admin"), api.ExecuteStockAdjustment)
 
 	// ========== SUPPLIER BILLS (invoices) ==========
 	app.Post("/supplier-bills", authMiddleware.ValidateToken, BranchMiddleware, api.CreateSupplierBill)

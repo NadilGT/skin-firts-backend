@@ -38,7 +38,8 @@ type MedicineBatchModel struct {
 	ExpiryDate      time.Time          `json:"expiryDate" bson:"expiryDate"`
 	BuyingPrice     float64            `json:"buyingPrice" bson:"buyingPrice"`
 	SellingPrice    float64            `json:"sellingPrice" bson:"sellingPrice"`
-	Status          string             `json:"status" bson:"status"` // ACTIVE, OUT_OF_STOCK, EXPIRED
+	Status           string             `json:"status" bson:"status"` // ACTIVE, OUT_OF_STOCK, EXPIRED
+	ReservedQuantity int                `json:"reservedQuantity" bson:"reservedQuantity"`
 	// Extended fields
 	BatchNumber  string    `json:"batchNumber,omitempty" bson:"batchNumber,omitempty"`
 	SupplierId   string    `json:"supplierId,omitempty" bson:"supplierId,omitempty"`

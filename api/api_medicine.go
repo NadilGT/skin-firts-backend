@@ -343,8 +343,13 @@ func CreateBill(c *fiber.Ctx) error {
 	var totalMedicinePrice float64
 
 	for _, item := range req.Items {
-		billItems, err := dao.DB_CheckStockAndCalculatePrice(item.MedicineID, item.Quantity)
+		// Use DB_ReserveStockFEFO to apply a hard soft-lock (reservedQuantity)
+		billItems, err := dao.DB_ReserveStockFEFO(item.MedicineID, item.Quantity)
 		if err != nil {
+			// If we fail on item N, we MUST rollback reservations for items 1 to N-1
+			if len(allBillItems) > 0 {
+				dao.DB_RevertStockReservation(allBillItems)
+			}
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"error": fmt.Sprintf("Failed to prepare bill for medicine %s: %s", item.MedicineID, err.Error()),
 			})
@@ -411,6 +416,7 @@ func CreateBill(c *fiber.Ctx) error {
 	}
 
 	if err := dao.DB_CreateBill(bill); err != nil {
+		dao.DB_RevertStockReservation(allBillItems)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Failed to save pending bill: " + err.Error(),
 		})
@@ -420,6 +426,28 @@ func CreateBill(c *fiber.Ctx) error {
 		"message": "Bill created successfully (Pending Confirmation)",
 		"data":    bill,
 	})
+}
+
+// CancelBill manually cancels a pending bill and releases its reserved stock immediately.
+func CancelBill(c *fiber.Ctx) error {
+	billId := c.Query("billId")
+	bill, err := dao.DB_GetBillByBillId(billId)
+	if err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Bill not found"})
+	}
+	if bill.Status != "PENDING" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Only PENDING bills can be cancelled"})
+	}
+
+	// Release stock reservations
+	dao.DB_RevertStockReservation(bill.Items)
+
+	// Update bill status to CANCELLED
+	if err := dao.DB_UpdateBillStatus(billId, "CANCELLED"); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to cancel bill"})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Bill cancelled and stock reservations released"})
 }
 
 func ConfirmBill(c *fiber.Ctx) error {

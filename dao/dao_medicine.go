@@ -22,6 +22,45 @@ func DB_CreateMedicine(medicine dto.MedicineModel) error {
 	return nil
 }
 
+// DB_ExpireOldBills finds and cancels bills that have been PENDING for > 30 mins
+func DB_ExpireOldBills() {
+	ctx := context.Background()
+	timeoutThreshold := time.Now().Add(-30 * time.Minute)
+
+	filter := bson.M{
+		"status":    "PENDING",
+		"createdAt": bson.M{"$lt": timeoutThreshold},
+	}
+
+	cursor, err := dbConfigs.BillCollection.Find(ctx, filter)
+	if err != nil {
+		return
+	}
+	defer cursor.Close(ctx)
+
+	var expiredBills []dto.BillModel
+	if err = cursor.All(ctx, &expiredBills); err != nil {
+		return
+	}
+
+	for _, bill := range expiredBills {
+		// Logically this is exactly what CancelBill does
+		DB_RevertStockReservation(bill.Items)
+		_ = DB_UpdateBillStatus(bill.BillId, "CANCELLED")
+		fmt.Printf("[WMS-CRON] Auto-expired Bill %s\n", bill.BillId)
+	}
+}
+
+// StartBillExpiryCron initializes a background ticker to clear stale reservations
+func StartBillExpiryCron() {
+	ticker := time.NewTicker(15 * time.Minute)
+	go func() {
+		for range ticker.C {
+			DB_ExpireOldBills()
+		}
+	}()
+}
+
 func DB_SearchMedicines(query dto.SearchMedicineQuery) ([]dto.MedicineModel, int64, error) {
 	ctx := context.Background()
 	
@@ -202,7 +241,12 @@ func DB_GetAvailableBatchesFEFO(medicineID string) ([]dto.MedicineBatchModel, er
 	ctx := context.Background()
 	filter := bson.M{
 		"medicineId": medicineID,
-		"quantity":   bson.M{"$gt": 0},
+		"$expr": bson.M{
+			"$gt": bson.A{
+				bson.M{"$subtract": bson.A{"$quantity", "$reservedQuantity"}},
+				0,
+			},
+		},
 		"expiryDate": bson.M{"$gt": time.Now()},
 		"status":     "ACTIVE",
 	}
@@ -254,8 +298,13 @@ func DB_DeductFromBatchAtomic(batchID primitive.ObjectID, deductAmount int) (int
 		"_id":      batchID,
 		"quantity": bson.M{"$gte": deductAmount},
 	}
+	// We decrement both quantity and reservedQuantity because confirmation 
+	// finalizes the reserved soft-lock.
 	update := bson.M{
-		"$inc": bson.M{"quantity": -deductAmount},
+		"$inc": bson.M{
+			"quantity":         -deductAmount,
+			"reservedQuantity": -deductAmount,
+		},
 	}
 
 	opts := options.FindOneAndUpdate().SetReturnDocument(options.After)
@@ -268,16 +317,96 @@ func DB_DeductFromBatchAtomic(batchID primitive.ObjectID, deductAmount int) (int
 		return 0, err
 	}
 
-	// If quantity is now 0, update status
-	if updatedBatch.Quantity == 0 {
-		_, _ = dbConfigs.MedicineBatchCollection.UpdateOne(
-			context.Background(),
-			bson.M{"_id": batchID},
-			bson.M{"$set": bson.M{"status": "OUT_OF_STOCK"}},
-		)
-	}
-
 	return updatedBatch.Quantity, nil
+}
+
+// DB_ReserveStockFEFO acts exactly like DB_CheckStockAndCalculatePrice but
+// atomically increments the reservedQuantity on those batches.
+// Used when creating a DRAFT Bill.
+func DB_ReserveStockFEFO(medicineID string, requiredQty int) ([]dto.BillItem, error) {
+	var billItems []dto.BillItem
+	remainingToReserve := requiredQty
+
+	for remainingToReserve > 0 {
+		batches, err := DB_GetAvailableBatchesFEFO(medicineID)
+		if err != nil {
+			return nil, err
+		}
+		if len(batches) == 0 {
+			if len(billItems) > 0 {
+				DB_RevertStockReservation(billItems)
+			}
+			return nil, fmt.Errorf("insufficient stock for medicine %s", medicineID)
+		}
+
+		reservedInThisPass := false
+		for _, b := range batches {
+			if remainingToReserve <= 0 {
+				break
+			}
+			
+			available := b.Quantity - b.ReservedQuantity
+			if available <= 0 {
+				continue
+			}
+
+			reserveAmount := available
+			if remainingToReserve < available {
+				reserveAmount = remainingToReserve
+			}
+
+			// Atomically lock reservation
+			filter := bson.M{
+				"_id": b.ID,
+				"$expr": bson.M{
+					"$gte": bson.A{
+						bson.M{"$subtract": bson.A{"$quantity", "$reservedQuantity"}},
+						reserveAmount,
+					},
+				},
+			}
+			update := bson.M{"$inc": bson.M{"reservedQuantity": reserveAmount}}
+			
+			res, err := dbConfigs.MedicineBatchCollection.UpdateOne(context.Background(), filter, update)
+			if err != nil || res.ModifiedCount == 0 {
+				// Failed to grab this batch due to concurrency, try next
+				continue
+			}
+
+			billItems = append(billItems, dto.BillItem{
+				MedicineID: b.MedicineID,
+				BatchID:    b.ID.Hex(),
+				Quantity:   reserveAmount,
+				Price:      b.SellingPrice,
+			})
+			remainingToReserve -= reserveAmount
+			reservedInThisPass = true
+
+			if remainingToReserve <= 0 {
+				break
+			}
+		}
+
+		if !reservedInThisPass && remainingToReserve > 0 {
+			time.Sleep(10 * time.Millisecond) // concurrency backoff
+		}
+	}
+	return billItems, nil
+}
+
+// DB_RevertStockReservation rolls back reservations from a bill array.
+// Used if bill fails, times out, or cancelled.
+func DB_RevertStockReservation(items []dto.BillItem) {
+	for _, item := range items {
+		objID, err := primitive.ObjectIDFromHex(item.BatchID)
+		if err != nil {
+			continue
+		}
+		// Safely decrement reservedQuantity, ensuring it doesn't drop below 0
+		filter := bson.M{"_id": objID, "reservedQuantity": bson.M{"$gte": item.Quantity}}
+		update := bson.M{"$inc": bson.M{"reservedQuantity": -item.Quantity}}
+		_ = dbConfigs.MedicineBatchCollection.FindOneAndUpdate(context.Background(), filter, update)
+	}
 }
 
 // DB_DeductStockFEFO deducts stock from the earliest-expiring batches (FEFO order).

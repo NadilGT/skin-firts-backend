@@ -2,6 +2,7 @@ package main
 
 import (
 	"lawyerSL-Backend/apiHandlers"
+	"lawyerSL-Backend/dao"
 	"lawyerSL-Backend/dbConfigs"
 	"lawyerSL-Backend/dto"
 	"lawyerSL-Backend/integrations"
@@ -26,7 +27,7 @@ func main() {
 	}))
 
 	dbConfigs.ConnectMongoDB(os.Getenv("MONGODB_URI"))
-
+	dao.StartBillExpiryCron()
 
 	firebaseApp, err := apiHandlers.InitFirebaseApp()
 	if err != nil {

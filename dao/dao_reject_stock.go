@@ -86,14 +86,6 @@ func DB_ExecuteRejectStock(id primitive.ObjectID, executedBy string) error {
 		return fmt.Errorf("insufficient stock in batch %s or batch not found: %v", r.BatchId, err)
 	}
 
-	// Mark batch OUT_OF_STOCK if depleted
-	if updatedBatch.Quantity == 0 {
-		_, _ = dbConfigs.MedicineBatchCollection.UpdateOne(ctx,
-			bson.M{"_id": batchObjID},
-			bson.M{"$set": bson.M{"status": "OUT_OF_STOCK"}},
-		)
-	}
-
 	// Write REJECT StockMovement to the ledger
 	movementId, err := GenerateId(ctx, "stock_movements", "MOV")
 	if err != nil {

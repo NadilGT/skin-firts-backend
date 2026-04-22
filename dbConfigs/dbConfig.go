@@ -46,6 +46,7 @@ var StockMovementCollection *mongo.Collection
 var RejectStockCollection *mongo.Collection
 var SupplierBillCollection *mongo.Collection
 var ApprovalCollection *mongo.Collection
+var StockAdjustmentCollection *mongo.Collection
 
 func ConnectMongoDB(uri string) *mongo.Client {
 	client, err := mongo.NewClient(options.Client().ApplyURI(uri))
@@ -100,6 +101,7 @@ func ConnectMongoDB(uri string) *mongo.Client {
 	RejectStockCollection = db.Collection("reject_stock")
 	SupplierBillCollection = db.Collection("supplier_bills")
 	ApprovalCollection = db.Collection("approvals")
+	StockAdjustmentCollection = db.Collection("stock_adjustments")
 
 	return client
 }

@@ -287,12 +287,6 @@ func DB_CompleteStockTransfer(transferID primitive.ObjectID) error {
 		if err := dbConfigs.MedicineBatchCollection.FindOneAndUpdate(ctx, filter, update, opts).Decode(&srcBatch); err != nil {
 			return fmt.Errorf("insufficient stock in batch %s: %v", item.BatchId, err)
 		}
-		// Mark out-of-stock if depleted
-		if srcBatch.Quantity == 0 {
-			_, _ = dbConfigs.MedicineBatchCollection.UpdateOne(ctx,
-				bson.M{"_id": batchObjID},
-				bson.M{"$set": bson.M{"status": "OUT_OF_STOCK"}})
-		}
 
 		// ── Write TRANSFER_OUT movement on source branch ──
 		outMovId, err := GenerateId(ctx, "stock_movements", "MOV")

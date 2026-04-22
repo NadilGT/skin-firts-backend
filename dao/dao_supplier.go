@@ -180,26 +180,43 @@ func DB_UpdatePOStatus(id primitive.ObjectID, req dto.UpdatePOStatusRequest, app
 //  GRN — Goods Received Note
 // ──────────────────────────────────────────────
 
+// DB_GetPurchaseOrderByPoId fetches a PO by its string PoId
+func DB_GetPurchaseOrderByPoId(poId string) (*dto.PurchaseOrderModel, error) {
+	var po dto.PurchaseOrderModel
+	err := dbConfigs.PurchaseOrderCollection.FindOne(context.Background(), bson.M{"poId": poId}).Decode(&po)
+	if err != nil {
+		return nil, err
+	}
+	return &po, nil
+}
+
 // DB_CreateGRN saves the GRN, auto-creates a medicine batch for each line item,
 // and writes a PURCHASE StockMovement to the audit ledger.
-// If the GRN references a PO (PoId is set), the PO must be in APPROVED status.
+// If the GRN references a PO (PoId is set), the PO must be APPROVED or PARTIALLY_RECEIVED.
 func DB_CreateGRN(grn dto.GRNModel) error {
 	ctx := context.Background()
 
-	// ── Approval gate: if a PO is linked, it must be APPROVED ──
+	var po *dto.PurchaseOrderModel
 	if grn.PoId != "" {
-		approved, err := DB_IsApproved(dto.ApprovalRefPO, grn.PoId)
+		// fetch PO to check status
+		var err error
+		po, err = DB_GetPurchaseOrderByPoId(grn.PoId)
 		if err != nil {
-			return fmt.Errorf("PO approval check failed: %v", err)
+			return fmt.Errorf("PO check failed: %v", err)
 		}
-		if !approved {
-			return fmt.Errorf("purchase order %s must be APPROVED before creating a GRN", grn.PoId)
+		if po.Status != "APPROVED" && po.Status != "PARTIALLY_RECEIVED" {
+			return fmt.Errorf("purchase order %s must be APPROVED or PARTIALLY_RECEIVED before creating a GRN", grn.PoId)
 		}
 	}
 
 	// Insert the GRN document
 	if _, err := dbConfigs.GRNCollection.InsertOne(ctx, grn); err != nil {
 		return err
+	}
+
+	// Auto set PO to PARTIALLY_RECEIVED
+	if po != nil && po.Status == "APPROVED" {
+		_ = DB_UpdatePOStatus(po.ID, dto.UpdatePOStatusRequest{Status: "PARTIALLY_RECEIVED", Notes: "System updated from GRN creation"}, grn.ReceivedBy)
 	}
 
 	// Auto-create medicine batches and write PURCHASE movements
