@@ -55,7 +55,7 @@ type PurchaseOrderModel struct {
 }
 
 type UpdatePOStatusRequest struct {
-	Status string `json:"status"`
+	Status string `json:"status"` // APPROVED & ORDERED & PARTIALLY_RECEIVED
 	Notes  string `json:"notes"`
 }
 

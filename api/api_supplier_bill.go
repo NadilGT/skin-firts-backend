@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 // CreateSupplierBill creates a new supplier invoice record.
@@ -94,16 +93,15 @@ func GetSupplierBills(c *fiber.Ctx) error {
 	})
 }
 
-// GetSupplierBillByID returns a single supplier bill by its MongoDB ObjectID.
+// GetSupplierBillByID returns a single supplier bill by its string billId.
 //
-// GET /supplier-bills/:id
+// GET /supplier-bills/id?id=...
 func GetSupplierBillByID(c *fiber.Ctx) error {
-	id := c.Params("id")
-	objectID, err := primitive.ObjectIDFromHex(id)
-	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid supplier bill ID"})
+	id := c.Query("id")
+	if id == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Missing supplier bill ID"})
 	}
-	bill, err := dao.DB_GetSupplierBillByID(objectID)
+	bill, err := dao.DB_GetSupplierBillByID(id)
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Supplier bill not found"})
 	}
@@ -114,13 +112,12 @@ func GetSupplierBillByID(c *fiber.Ctx) error {
 // The payment is accumulated (cumulative), so paidAmount in the request is the
 // new payment amount — not the total paid to date.
 //
-// PATCH /supplier-bills/:id/payment
+// PATCH /supplier-bills/id/payment?id=...
 // Body: { paidAmount, paymentMethod, notes }
 func UpdateSupplierBillPayment(c *fiber.Ctx) error {
-	id := c.Params("id")
-	objectID, err := primitive.ObjectIDFromHex(id)
-	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid supplier bill ID"})
+	id := c.Query("id")
+	if id == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Missing supplier bill ID"})
 	}
 	var req dto.UpdateSupplierBillPaymentRequest
 	if err := c.BodyParser(&req); err != nil {
@@ -129,7 +126,7 @@ func UpdateSupplierBillPayment(c *fiber.Ctx) error {
 	if req.PaidAmount <= 0 {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "PaidAmount must be greater than 0"})
 	}
-	if err := dao.DB_UpdateSupplierBillPayment(objectID, req); err != nil {
+	if err := dao.DB_UpdateSupplierBillPayment(id, req); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update payment: " + err.Error()})
 	}
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Payment recorded successfully"})

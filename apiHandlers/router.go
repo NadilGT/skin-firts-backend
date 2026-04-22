@@ -188,8 +188,8 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 	// ========== PURCHASE ORDERS (branch-scoped) ==========
 	app.Post("/purchase-orders", authMiddleware.ValidateToken, BranchMiddleware, api.CreatePurchaseOrder)
 	app.Get("/purchase-orders", authMiddleware.ValidateToken, BranchMiddleware, api.GetPurchaseOrders)
-	app.Get("/purchase-orders/:id", authMiddleware.ValidateToken, BranchMiddleware, api.GetPurchaseOrderByID)
-	app.Patch("/purchase-orders/:id/status", authMiddleware.ValidateToken, BranchMiddleware, api.UpdatePurchaseOrderStatus)
+	app.Get("/purchase-orders/id", authMiddleware.ValidateToken, BranchMiddleware, api.GetPurchaseOrderByID)
+	app.Patch("/purchase-orders/id/status", authMiddleware.ValidateToken, BranchMiddleware, api.UpdatePurchaseOrderStatus)
 
 	// ========== GRN (branch-scoped) ==========
 	app.Post("/grn", authMiddleware.ValidateToken, BranchMiddleware, api.CreateGRN)
@@ -243,8 +243,8 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 	// ========== SUPPLIER BILLS (invoices) ==========
 	app.Post("/supplier-bills", authMiddleware.ValidateToken, BranchMiddleware, api.CreateSupplierBill)
 	app.Get("/supplier-bills", authMiddleware.ValidateToken, BranchMiddleware, api.GetSupplierBills)
-	app.Get("/supplier-bills/:id", authMiddleware.ValidateToken, BranchMiddleware, api.GetSupplierBillByID)
-	app.Patch("/supplier-bills/:id/payment", authMiddleware.ValidateToken, BranchMiddleware, api.UpdateSupplierBillPayment)
+	app.Get("/supplier-bills/id", authMiddleware.ValidateToken, BranchMiddleware, api.GetSupplierBillByID)
+	app.Patch("/supplier-bills/id/payment", authMiddleware.ValidateToken, BranchMiddleware, api.UpdateSupplierBillPayment)
 
 	// ========== APPROVALS (generic workflow) ==========
 	app.Get("/approvals", authMiddleware.ValidateToken, BranchMiddleware, api.GetApprovals)

@@ -96,9 +96,9 @@ func DB_CreatePurchaseOrder(po dto.PurchaseOrderModel) error {
 	return err
 }
 
-func DB_GetPurchaseOrderByID(id primitive.ObjectID) (*dto.PurchaseOrderModel, error) {
+func DB_GetPurchaseOrderByID(poId string) (*dto.PurchaseOrderModel, error) {
 	var po dto.PurchaseOrderModel
-	err := dbConfigs.PurchaseOrderCollection.FindOne(context.Background(), bson.M{"_id": id}).Decode(&po)
+	err := dbConfigs.PurchaseOrderCollection.FindOne(context.Background(), bson.M{"poId": poId}).Decode(&po)
 	if err != nil {
 		return nil, err
 	}
@@ -137,9 +137,9 @@ func DB_SearchPurchaseOrders(query dto.SearchPOQuery) ([]dto.PurchaseOrderModel,
 	return pos, total, nil
 }
 
-func DB_UpdatePOStatus(id primitive.ObjectID, req dto.UpdatePOStatusRequest, approvedBy string) error {
+func DB_UpdatePOStatus(poId string, req dto.UpdatePOStatusRequest, approvedBy string) error {
 	ctx := context.Background()
-	filter := bson.M{"_id": id}
+	filter := bson.M{"poId": poId}
 	update := bson.M{
 		"$set": bson.M{
 			"status":    req.Status,
@@ -155,7 +155,7 @@ func DB_UpdatePOStatus(id primitive.ObjectID, req dto.UpdatePOStatusRequest, app
 	// When a PO is approved, create an Approval record so GRN can gate on it
 	if req.Status == "APPROVED" {
 		// Fetch the PO to get its business ID
-		po, poErr := DB_GetPurchaseOrderByID(id)
+		po, poErr := DB_GetPurchaseOrderByID(poId)
 		if poErr == nil && po != nil {
 			approvalId, aErr := GenerateId(ctx, "approvals", "APR")
 			if aErr == nil {
@@ -180,16 +180,6 @@ func DB_UpdatePOStatus(id primitive.ObjectID, req dto.UpdatePOStatusRequest, app
 //  GRN — Goods Received Note
 // ──────────────────────────────────────────────
 
-// DB_GetPurchaseOrderByPoId fetches a PO by its string PoId
-func DB_GetPurchaseOrderByPoId(poId string) (*dto.PurchaseOrderModel, error) {
-	var po dto.PurchaseOrderModel
-	err := dbConfigs.PurchaseOrderCollection.FindOne(context.Background(), bson.M{"poId": poId}).Decode(&po)
-	if err != nil {
-		return nil, err
-	}
-	return &po, nil
-}
-
 // DB_CreateGRN saves the GRN, auto-creates a medicine batch for each line item,
 // and writes a PURCHASE StockMovement to the audit ledger.
 // If the GRN references a PO (PoId is set), the PO must be APPROVED or PARTIALLY_RECEIVED.
@@ -200,7 +190,7 @@ func DB_CreateGRN(grn dto.GRNModel) error {
 	if grn.PoId != "" {
 		// fetch PO to check status
 		var err error
-		po, err = DB_GetPurchaseOrderByPoId(grn.PoId)
+		po, err = DB_GetPurchaseOrderByID(grn.PoId)
 		if err != nil {
 			return fmt.Errorf("PO check failed: %v", err)
 		}
@@ -216,7 +206,7 @@ func DB_CreateGRN(grn dto.GRNModel) error {
 
 	// Auto set PO to PARTIALLY_RECEIVED
 	if po != nil && po.Status == "APPROVED" {
-		_ = DB_UpdatePOStatus(po.ID, dto.UpdatePOStatusRequest{Status: "PARTIALLY_RECEIVED", Notes: "System updated from GRN creation"}, grn.ReceivedBy)
+		_ = DB_UpdatePOStatus(po.PoId, dto.UpdatePOStatusRequest{Status: "PARTIALLY_RECEIVED", Notes: "System updated from GRN creation"}, grn.ReceivedBy)
 	}
 
 	// Auto-create medicine batches (global) + branch stock (per-branch) and write PURCHASE movements

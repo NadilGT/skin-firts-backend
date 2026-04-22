@@ -20,10 +20,10 @@ func DB_CreateSupplierBill(bill dto.SupplierBillModel) error {
 	return err
 }
 
-// DB_GetSupplierBillByID fetches a supplier bill by MongoDB ObjectID.
-func DB_GetSupplierBillByID(id primitive.ObjectID) (*dto.SupplierBillModel, error) {
+// DB_GetSupplierBillByID fetches a supplier bill by its string billId.
+func DB_GetSupplierBillByID(billId string) (*dto.SupplierBillModel, error) {
 	var bill dto.SupplierBillModel
-	err := dbConfigs.SupplierBillCollection.FindOne(context.Background(), bson.M{"_id": id}).Decode(&bill)
+	err := dbConfigs.SupplierBillCollection.FindOne(context.Background(), bson.M{"billId": billId}).Decode(&bill)
 	if err != nil {
 		return nil, err
 	}
@@ -99,11 +99,11 @@ func DB_SearchSupplierBills(query dto.SearchSupplierBillQuery) ([]dto.SupplierBi
 
 // DB_UpdateSupplierBillPayment records a payment against a supplier bill and
 // recalculates dueAmount and paymentStatus accordingly.
-func DB_UpdateSupplierBillPayment(id primitive.ObjectID, req dto.UpdateSupplierBillPaymentRequest) error {
+func DB_UpdateSupplierBillPayment(billId string, req dto.UpdateSupplierBillPaymentRequest) error {
 	ctx := context.Background()
 
 	// Fetch current bill
-	bill, err := DB_GetSupplierBillByID(id)
+	bill, err := DB_GetSupplierBillByID(billId)
 	if err != nil {
 		return err
 	}
@@ -137,7 +137,7 @@ func DB_UpdateSupplierBillPayment(id primitive.ObjectID, req dto.UpdateSupplierB
 
 	_, err = dbConfigs.SupplierBillCollection.UpdateOne(
 		ctx,
-		bson.M{"_id": id},
+		bson.M{"billId": billId},
 		bson.M{"$set": updateFields},
 	)
 	return err

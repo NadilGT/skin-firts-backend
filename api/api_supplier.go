@@ -169,12 +169,11 @@ func GetPurchaseOrders(c *fiber.Ctx) error {
 }
 
 func GetPurchaseOrderByID(c *fiber.Ctx) error {
-	id := c.Params("id")
-	objectID, err := primitive.ObjectIDFromHex(id)
-	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid purchase order ID"})
+	id := c.Query("id")
+	if id == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Missing purchase order ID"})
 	}
-	po, err := dao.DB_GetPurchaseOrderByID(objectID)
+	po, err := dao.DB_GetPurchaseOrderByID(id)
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Purchase order not found"})
 	}
@@ -182,10 +181,9 @@ func GetPurchaseOrderByID(c *fiber.Ctx) error {
 }
 
 func UpdatePurchaseOrderStatus(c *fiber.Ctx) error {
-	id := c.Params("id")
-	objectID, err := primitive.ObjectIDFromHex(id)
-	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid purchase order ID"})
+	id := c.Query("id")
+	if id == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Missing purchase order ID"})
 	}
 	var req dto.UpdatePOStatusRequest
 	if err := c.BodyParser(&req); err != nil {
@@ -196,7 +194,7 @@ func UpdatePurchaseOrderStatus(c *fiber.Ctx) error {
 	}
 	// Extract caller identity for approval audit trail
 	approvedBy, _ := c.Locals("uid").(string)
-	if err := dao.DB_UpdatePOStatus(objectID, req, approvedBy); err != nil {
+	if err := dao.DB_UpdatePOStatus(id, req, approvedBy); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update PO status: " + err.Error()})
 	}
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Purchase order status updated to " + req.Status})
