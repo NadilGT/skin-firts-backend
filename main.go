@@ -21,7 +21,7 @@ func main() {
 	integrations.SetEnvironmentVariables()
 
 	app.Use(cors.New(cors.Config{
-		AllowOrigins: "http://localhost:8080,https://med-center-hub.vercel.app,https://medical.nadildinsara.me",
+		AllowOrigins: "http://localhost:8080,https://med-center-hub.vercel.app,https://medical.nadildinsara.me,https://med-center-ja6wc3a97-nadil-dinsaras-projects.vercel.app",
 		AllowHeaders: "Origin, Content-Type, Accept, Authorization",
 		AllowMethods: "GET, POST, PUT, DELETE, PATCH",
 	}))
