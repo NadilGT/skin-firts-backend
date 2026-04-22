@@ -30,35 +30,70 @@ type MedicineModel struct {
 	UpdatedAt            time.Time          `json:"updatedAt" bson:"updatedAt"`
 }
 
-type MedicineBatchModel struct {
-	ID              primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
-	MedicineBatchId string             `json:"MedicineBatchId" bson:"medicinebatchid"`
-	MedicineID      string             `json:"medicineId" bson:"medicineId"`
-	Quantity        int                `json:"quantity" bson:"quantity"`
-	ExpiryDate      time.Time          `json:"expiryDate" bson:"expiryDate"`
-	BuyingPrice     float64            `json:"buyingPrice" bson:"buyingPrice"`
-	SellingPrice    float64            `json:"sellingPrice" bson:"sellingPrice"`
-	Status           string             `json:"status" bson:"status"` // ACTIVE, OUT_OF_STOCK, EXPIRED
+// MedicineBatch is a GLOBAL concept — one shipment from a supplier.
+// It has NO quantity, NO branch. It describes what the batch IS.
+type MedicineBatch struct {
+	ID          primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
+	BatchId     string             `json:"batchId" bson:"batchId"`       // BAT-XXXX
+	MedicineId  string             `json:"medicineId" bson:"medicineId"` // FK → Medicine
+	BatchNumber string             `json:"batchNumber" bson:"batchNumber"` // physical label e.g. "B2024-001"
+	ExpiryDate  time.Time          `json:"expiryDate" bson:"expiryDate"`
+	BuyingPrice float64            `json:"buyingPrice" bson:"buyingPrice"`
+	SellingPrice float64           `json:"sellingPrice" bson:"sellingPrice"`
+	SupplierId  string             `json:"supplierId,omitempty" bson:"supplierId,omitempty"`
+	// Status: ACTIVE | EXPIRED | BLOCKED (NOT out-of-stock — that's derived from BranchStock)
+	Status    string    `json:"status" bson:"status"`
+	Notes     string    `json:"notes,omitempty" bson:"notes,omitempty"`
+	CreatedAt time.Time `json:"createdAt" bson:"createdAt"`
+}
+
+// BranchStock is a BRANCH-SPECIFIC concept — how much of a batch a branch holds.
+// Every branch that holds stock from a given batch gets its own BranchStock document.
+type BranchStock struct {
+	ID               primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
+	StockId          string             `json:"stockId" bson:"stockId"`     // STK-XXXX
+	BatchId          string             `json:"batchId" bson:"batchId"`     // FK → MedicineBatch.BatchId
+	MedicineId       string             `json:"medicineId" bson:"medicineId"` // denormalized for query speed
+	BranchId         string             `json:"branchId" bson:"branchId"`
+	Quantity         int                `json:"quantity" bson:"quantity"`
 	ReservedQuantity int                `json:"reservedQuantity" bson:"reservedQuantity"`
-	// Extended fields
-	BatchNumber  string    `json:"batchNumber,omitempty" bson:"batchNumber,omitempty"`
-	SupplierId   string    `json:"supplierId,omitempty" bson:"supplierId,omitempty"`
-	BranchId     string    `json:"branchId,omitempty" bson:"branchId,omitempty"`
-	ReceivedDate time.Time `json:"receivedDate,omitempty" bson:"receivedDate,omitempty"`
-	Notes        string    `json:"notes,omitempty" bson:"notes,omitempty"`
-	CreatedAt    time.Time `json:"createdAt" bson:"createdAt"`
+	UpdatedAt        time.Time          `json:"updatedAt" bson:"updatedAt"`
 }
 
+// BranchStockView is a read-optimised join of MedicineBatch + BranchStock.
+// Used for FEFO queries and reports — never written to DB directly.
+type BranchStockView struct {
+	// From BranchStock
+	StockId          string `json:"stockId" bson:"stockId"`
+	BatchId          string `json:"batchId" bson:"batchId"`
+	MedicineId       string `json:"medicineId" bson:"medicineId"`
+	BranchId         string `json:"branchId" bson:"branchId"`
+	Quantity         int    `json:"quantity" bson:"quantity"`
+	ReservedQuantity int    `json:"reservedQuantity" bson:"reservedQuantity"`
+	// From MedicineBatch (joined)
+	BatchNumber  string    `json:"batchNumber" bson:"batchNumber"`
+	ExpiryDate   time.Time `json:"expiryDate" bson:"expiryDate"`
+	SellingPrice float64   `json:"sellingPrice" bson:"sellingPrice"`
+	BuyingPrice  float64   `json:"buyingPrice" bson:"buyingPrice"`
+	BatchStatus  string    `json:"batchStatus" bson:"batchStatus"`
+}
+
+// BillItem represents one line in a confirmed bill.
+// BatchID is mandatory (global batch reference).
+// StockID is optional but recommended (points to the exact BranchStock doc deducted).
 type BillItem struct {
-	MedicineID string             `json:"medicineId" bson:"medicineId"`
-	BatchID    string             `json:"batchId" bson:"batchId"`
-	Quantity   int                `json:"quantity" bson:"quantity"`
-	Price      float64            `json:"price" bson:"price"`
+	MedicineID string  `json:"medicineId" bson:"medicineId"`
+	BatchID    string  `json:"batchId" bson:"batchId"`
+	StockID    string  `json:"stockId,omitempty" bson:"stockId,omitempty"`
+	Quantity   int     `json:"quantity" bson:"quantity"`
+	Price      float64 `json:"price" bson:"price"`
 }
 
+// DeductStockRequest is the payload for a direct stock deduction (e.g. standalone endpoint).
 type DeductStockRequest struct {
 	MedicineID string `json:"medicineId"`
 	Quantity   int    `json:"quantity"`
+	BranchId   string `json:"branchId"` // required — stock is branch-specific
 }
 
 type SearchMedicineQuery struct {

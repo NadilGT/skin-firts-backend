@@ -81,28 +81,30 @@ func DB_ExecuteStockAdjustment(id primitive.ObjectID, executedBy string) error {
 		return fmt.Errorf("adjustment must be APPROVED before execution")
 	}
 
-	batchObjID, err := primitive.ObjectIDFromHex(adj.BatchId)
-	if err != nil {
-		return fmt.Errorf("invalid batch ID")
-	}
-
-	// Double check batch exists
-	var batch dto.MedicineBatchModel
-	err = dbConfigs.MedicineBatchCollection.FindOne(ctx, bson.M{"_id": batchObjID}).Decode(&batch)
+	// 1. Check expiration from global MedicineBatch
+	var batch dto.MedicineBatch
+	err = dbConfigs.MedicineBatchCollection.FindOne(ctx, bson.M{"batchId": adj.BatchId}).Decode(&batch)
 	if err != nil {
 		return fmt.Errorf("batch not found")
 	}
-
-	// Expired block
 	if time.Now().After(batch.ExpiryDate) {
 		return fmt.Errorf("cannot adjust an expired batch")
+	}
+
+	// 2. Load BranchStock
+	var stock dto.BranchStock
+	err = dbConfigs.BranchStockCollection.FindOne(ctx, bson.M{"stockId": adj.StockId, "branchId": adj.BranchId}).Decode(&stock)
+	if err != nil {
+		return fmt.Errorf("stock record not found for branch")
 	}
 
 	updateMod := 0
 	if adj.Type == "ADJUSTMENT_IN" {
 		updateMod = adj.Quantity
 	} else if adj.Type == "ADJUSTMENT_OUT" {
-		if batch.Quantity < adj.Quantity {
+		// Calculate available mathematically without blocking reservations
+		available := stock.Quantity - stock.ReservedQuantity
+		if available < adj.Quantity {
 			return fmt.Errorf("insufficient stock for OUT adjustment")
 		}
 		updateMod = -adj.Quantity
@@ -110,16 +112,19 @@ func DB_ExecuteStockAdjustment(id primitive.ObjectID, executedBy string) error {
 		return fmt.Errorf("invalid adjustment type")
 	}
 
-	update := bson.M{"$inc": bson.M{"quantity": updateMod}}
+	update := bson.M{
+		"$inc": bson.M{"quantity": updateMod},
+		"$set": bson.M{"updatedAt": time.Now()},
+	}
 
 	opts := options.FindOneAndUpdate().SetReturnDocument(options.After)
-	var updatedBatch dto.MedicineBatchModel
-	err = dbConfigs.MedicineBatchCollection.FindOneAndUpdate(ctx, bson.M{"_id": batchObjID}, update, opts).Decode(&updatedBatch)
+	var updated dto.BranchStock
+	err = dbConfigs.BranchStockCollection.FindOneAndUpdate(ctx, bson.M{"_id": stock.ID}, update, opts).Decode(&updated)
 	if err != nil {
 		return err
 	}
 
-	// Write Movement
+	// 3. Write Movement
 	movementId, _ := GenerateId(ctx, "stock_movements", "MOV")
 	_ = DB_CreateStockMovement(dto.StockMovementModel{
 		ID:            primitive.NewObjectID(),
@@ -128,7 +133,7 @@ func DB_ExecuteStockAdjustment(id primitive.ObjectID, executedBy string) error {
 		MedicineId:    adj.MedicineId,
 		BranchId:      adj.BranchId,
 		Type:          dto.MovementAdjustment,
-		Quantity:      adj.Quantity, // Note the immutable ledger holds pure unsigned number; the Type indicates if it was IN or OUT if we look deeply, but we can suffix it via Notes
+		Quantity:      adj.Quantity,
 		ReferenceId:   adj.AdjustmentId,
 		ReferenceType: "ADJUSTMENT",
 		Notes:         fmt.Sprintf("Type: %s, Reason: %s", adj.Type, adj.Reason),

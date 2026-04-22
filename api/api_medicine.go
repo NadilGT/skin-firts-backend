@@ -195,7 +195,7 @@ func DebugMedicineRequest(c *fiber.Ctx) error {
 // ========== BATCH APIS ==========
 
 func CreateMedicineBatch(c *fiber.Ctx) error {
-	var batch dto.MedicineBatchModel
+	var batch dto.MedicineBatch
 	if err := c.BodyParser(&batch); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "Invalid request body",
@@ -207,7 +207,7 @@ func CreateMedicineBatch(c *fiber.Ctx) error {
 	if err != nil {
 		return utils.SendErrorResponse(c, fiber.StatusInternalServerError, err.Error())
 	}
-	batch.MedicineBatchId = id
+	batch.BatchId = id
 
 	batch.ID = primitive.NewObjectID()
 	batch.CreatedAt = time.Now()
@@ -256,7 +256,14 @@ func GetAvailableBatchesFEFO(c *fiber.Ctx) error {
 		})
 	}
 
-	batches, err := dao.DB_GetAvailableBatchesFEFO(id)
+	branchId := c.Query("branchId")
+	if branchId == "" {
+		if val, ok := c.Locals("effectiveBranchId").(string); ok {
+			branchId = val
+		}
+	}
+
+	batches, err := dao.DB_GetAvailableBatchesFEFO(id, branchId)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Failed to retrieve available batches",
@@ -276,7 +283,14 @@ func GetActiveStockByMedicineID(c *fiber.Ctx) error {
 		})
 	}
 
-	totalStock, err := dao.DB_GetActiveStockByMedicineID(id)
+	branchId := c.Query("branchId")
+	if branchId == "" {
+		if val, ok := c.Locals("effectiveBranchId").(string); ok {
+			branchId = val
+		}
+	}
+
+	totalStock, err := dao.DB_GetActiveStockByMedicineID(id, branchId)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Failed to retrieve stock",
@@ -335,8 +349,13 @@ func CreateBill(c *fiber.Ctx) error {
 	patientID := c.Query("patientId")
 
 	// Auto-inject branchId from JWT — prevents spoofing
-	if branchId, ok := c.Locals("effectiveBranchId").(string); ok && branchId != "" {
+	branchId := ""
+	if val, ok := c.Locals("effectiveBranchId").(string); ok && val != "" {
+		branchId = val
 		req.BranchId = branchId
+	} else {
+		// Fallback to request payload if local not hit (e.g. testing)
+		branchId = req.BranchId
 	}
 
 	var allBillItems []dto.BillItem
@@ -344,7 +363,7 @@ func CreateBill(c *fiber.Ctx) error {
 
 	for _, item := range req.Items {
 		// Use DB_ReserveStockFEFO to apply a hard soft-lock (reservedQuantity)
-		billItems, err := dao.DB_ReserveStockFEFO(item.MedicineID, item.Quantity)
+		billItems, err := dao.DB_ReserveStockFEFO(item.MedicineID, branchId, item.Quantity)
 		if err != nil {
 			// If we fail on item N, we MUST rollback reservations for items 1 to N-1
 			if len(allBillItems) > 0 {

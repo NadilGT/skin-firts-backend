@@ -9,6 +9,7 @@ import (
 type StockAdjustmentModel struct {
 	ID           primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
 	AdjustmentId string             `json:"adjustmentId" bson:"adjustmentId"`
+	StockId      string             `json:"stockId" bson:"stockId"`
 	BatchId      string             `json:"batchId" bson:"batchId"`
 	MedicineId   string             `json:"medicineId" bson:"medicineId"`
 	BranchId     string             `json:"branchId" bson:"branchId"`

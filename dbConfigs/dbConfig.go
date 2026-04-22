@@ -16,7 +16,8 @@ var DoctorInfoCollection *mongo.Collection
 var AppointmentCollection *mongo.Collection
 var DoctorScheduleCollection *mongo.Collection
 var MedicineCollection *mongo.Collection
-var MedicineBatchCollection *mongo.Collection
+var MedicineBatchCollection *mongo.Collection // global batch identity (no qty/branch)
+var BranchStockCollection *mongo.Collection   // branch-specific stock levels
 var IdCounters *mongo.Collection
 var MedicineOrderCollection *mongo.Collection
 var FocusCollection *mongo.Collection
@@ -72,6 +73,7 @@ func ConnectMongoDB(uri string) *mongo.Client {
 	DoctorScheduleCollection = db.Collection("doctor_schedules")
 	MedicineCollection = db.Collection("medicines")
 	MedicineBatchCollection = db.Collection("medicine_batches")
+	BranchStockCollection = db.Collection("branch_stock")
 	IdCounters = db.Collection("id_counters")
 	MedicineOrderCollection = db.Collection("medicine_orders")
 	FocusCollection = db.Collection("focus_categories")

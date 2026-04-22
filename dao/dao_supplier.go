@@ -219,33 +219,50 @@ func DB_CreateGRN(grn dto.GRNModel) error {
 		_ = DB_UpdatePOStatus(po.ID, dto.UpdatePOStatusRequest{Status: "PARTIALLY_RECEIVED", Notes: "System updated from GRN creation"}, grn.ReceivedBy)
 	}
 
-	// Auto-create medicine batches and write PURCHASE movements
+	// Auto-create medicine batches (global) + branch stock (per-branch) and write PURCHASE movements
 	for _, item := range grn.Items {
 		batchId, err := GenerateId(ctx, "medicine_batches", "BAT")
 		if err != nil {
 			return err
 		}
-		batch := dto.MedicineBatchModel{
-			ID:              primitive.NewObjectID(),
-			MedicineBatchId: batchId,
-			MedicineID:      item.MedicineID,
-			Quantity:        item.Quantity,
-			ExpiryDate:      item.ExpiryDate,
-			BuyingPrice:     item.BuyingPrice,
-			SellingPrice:    item.SellingPrice,
-			Status:          "ACTIVE",
-			BatchNumber:     item.BatchNumber,
-			SupplierId:      grn.SupplierId,
-			BranchId:        grn.BranchId,
-			ReceivedDate:    grn.ReceivedDate,
-			Notes:           grn.Notes,
-			CreatedAt:       time.Now(),
+		// 1. Insert global MedicineBatch — no qty, no branch
+		batch := dto.MedicineBatch{
+			ID:           primitive.NewObjectID(),
+			BatchId:      batchId,
+			MedicineId:   item.MedicineID,
+			BatchNumber:  item.BatchNumber,
+			ExpiryDate:   item.ExpiryDate,
+			BuyingPrice:  item.BuyingPrice,
+			SellingPrice: item.SellingPrice,
+			SupplierId:   grn.SupplierId,
+			Status:       "ACTIVE",
+			Notes:        grn.Notes,
+			CreatedAt:    time.Now(),
 		}
-		if _, err := dbConfigs.MedicineBatchCollection.InsertOne(ctx, batch); err != nil {
+		if err := dao_CreateMedicineBatch(ctx, batch); err != nil {
 			return err
 		}
 
-		// ── Write PURCHASE movement to audit ledger ──
+		// 2. Insert BranchStock — branch-specific qty
+		stockId, err := GenerateId(ctx, "branch_stock", "STK")
+		if err != nil {
+			return err
+		}
+		stock := dto.BranchStock{
+			ID:               primitive.NewObjectID(),
+			StockId:          stockId,
+			BatchId:          batchId,
+			MedicineId:       item.MedicineID,
+			BranchId:         grn.BranchId,
+			Quantity:         item.Quantity,
+			ReservedQuantity: 0,
+			UpdatedAt:        time.Now(),
+		}
+		if _, err := dbConfigs.BranchStockCollection.InsertOne(ctx, stock); err != nil {
+			return err
+		}
+
+		// 3. Write PURCHASE movement to audit ledger
 		movementId, err := GenerateId(ctx, "stock_movements", "MOV")
 		if err != nil {
 			return fmt.Errorf("failed to generate movement id: %v", err)
@@ -270,6 +287,13 @@ func DB_CreateGRN(grn dto.GRNModel) error {
 	}
 	return nil
 }
+
+// dao_CreateMedicineBatch is an internal helper that inserts a MedicineBatch (used within DAO layer).
+func dao_CreateMedicineBatch(ctx context.Context, batch dto.MedicineBatch) error {
+	_, err := dbConfigs.MedicineBatchCollection.InsertOne(ctx, batch)
+	return err
+}
+
 
 func DB_GetGRNByID(id primitive.ObjectID) (*dto.GRNModel, error) {
 	var grn dto.GRNModel

@@ -57,7 +57,7 @@ func DB_ApproveRejectStock(id primitive.ObjectID, approvedBy string, notes strin
 	return err
 }
 
-// DB_ExecuteRejectStock transitions APPROVED → COMPLETED, deducts batch quantity,
+// DB_ExecuteRejectStock transitions APPROVED → COMPLETED, deducts BranchStock quantity,
 // and records a REJECT StockMovement in the ledger.
 func DB_ExecuteRejectStock(id primitive.ObjectID, executedBy string) error {
 	ctx := context.Background()
@@ -70,20 +70,16 @@ func DB_ExecuteRejectStock(id primitive.ObjectID, executedBy string) error {
 		return fmt.Errorf("reject stock must be APPROVED before execution (current: %s)", r.Status)
 	}
 
-	// Parse batchId as ObjectID
-	batchObjID, err := primitive.ObjectIDFromHex(r.BatchId)
-	if err != nil {
-		return fmt.Errorf("invalid batchId %s: %v", r.BatchId, err)
+	// Atomically deduct from BranchStock (not the global batch)
+	filter := bson.M{"stockId": r.StockId, "branchId": r.BranchId, "quantity": bson.M{"$gte": r.Quantity}}
+	update := bson.M{
+		"$inc": bson.M{"quantity": -r.Quantity},
+		"$set": bson.M{"updatedAt": time.Now()},
 	}
-
-	// Atomically deduct quantity from batch — fail if not enough stock
-	filter := bson.M{"_id": batchObjID, "quantity": bson.M{"$gte": r.Quantity}}
-	update := bson.M{"$inc": bson.M{"quantity": -r.Quantity}}
 	opts := options.FindOneAndUpdate().SetReturnDocument(options.After)
-
-	var updatedBatch dto.MedicineBatchModel
-	if err := dbConfigs.MedicineBatchCollection.FindOneAndUpdate(ctx, filter, update, opts).Decode(&updatedBatch); err != nil {
-		return fmt.Errorf("insufficient stock in batch %s or batch not found: %v", r.BatchId, err)
+	var updated dto.BranchStock
+	if err := dbConfigs.BranchStockCollection.FindOneAndUpdate(ctx, filter, update, opts).Decode(&updated); err != nil {
+		return fmt.Errorf("insufficient stock in branch stock record %s: %v", r.StockId, err)
 	}
 
 	// Write REJECT StockMovement to the ledger
@@ -117,6 +113,7 @@ func DB_ExecuteRejectStock(id primitive.ObjectID, executedBy string) error {
 	)
 	return err
 }
+
 
 // DB_SearchRejectStock returns paginated reject stock records.
 func DB_SearchRejectStock(query dto.SearchRejectQuery) ([]dto.RejectStockModel, int64, error) {

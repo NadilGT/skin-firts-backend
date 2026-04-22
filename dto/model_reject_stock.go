@@ -21,7 +21,8 @@ const (
 type RejectStockModel struct {
 	ID         primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
 	RejectId   string             `json:"rejectId" bson:"rejectId"`
-	BatchId    string             `json:"batchId" bson:"batchId"`
+	BatchId    string             `json:"batchId" bson:"batchId"` // Global Batch
+	StockId    string             `json:"stockId" bson:"stockId"` // Specific Branch Stock
 	MedicineId string             `json:"medicineId" bson:"medicineId"`
 	BranchId   string             `json:"branchId" bson:"branchId"`
 	// Type: EXPIRED | DAMAGED | RETURN_TO_SUPPLIER

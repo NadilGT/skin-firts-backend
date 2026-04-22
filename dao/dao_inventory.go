@@ -100,46 +100,64 @@ func DB_GetStockValuation(branchId string) (*dto.StockValuationResponse, error) 
 //  Expiry Alerts
 // ──────────────────────────────────────────────
 
-// DB_GetExpiryAlerts returns batches expiring within `days` days.
+// DB_GetExpiryAlerts returns batches expiring within 'days' days.
 func DB_GetExpiryAlerts(branchId string, days int) ([]dto.ExpiryAlertItem, error) {
 	ctx := context.Background()
-
-	if days <= 0 {
-		days = 90
-	}
 	threshold := time.Now().AddDate(0, 0, days)
 
-	filter := bson.M{
-		"status":   "ACTIVE",
-		"quantity": bson.M{"$gt": 0},
-		"expiryDate": bson.M{
-			"$lte": threshold,
-			"$gte": time.Now(),
-		},
+	pipeline := bson.A{
+		// 1. Join branch_stock with medicine_batches
+		bson.M{"$lookup": bson.M{
+			"from":         "medicine_batches",
+			"localField":   "batchId",
+			"foreignField": "batchId",
+			"as":           "batchInfo",
+		}},
+		bson.M{"$unwind": "$batchInfo"},
+		// 2. Filter: quantity > 0, expiryDate <= threshold && >= now
+		bson.M{"$match": bson.M{
+			"quantity": bson.M{"$gt": 0},
+			"batchInfo.expiryDate": bson.M{
+				"$lte": threshold,
+				"$gte": time.Now(),
+			},
+		}},
 	}
+	
 	if branchId != "" {
-		filter["branchId"] = branchId
+		pipeline = append([]interface{}{
+			bson.M{"$match": bson.M{"branchId": branchId}},
+		}, pipeline...)
 	}
 
-	findOpts := options.Find().SetSort(bson.D{{Key: "expiryDate", Value: 1}})
-	cursor, err := dbConfigs.MedicineBatchCollection.Find(ctx, filter, findOpts)
+	// 3. Sort by expiry date ascending
+	pipeline = append(pipeline, bson.M{"$sort": bson.D{{Key: "batchInfo.expiryDate", Value: 1}}})
+
+	cursor, err := dbConfigs.BranchStockCollection.Aggregate(ctx, pipeline)
 	if err != nil {
 		return nil, err
 	}
 	defer cursor.Close(ctx)
 
-	var batches []dto.MedicineBatchModel
-	if err = cursor.All(ctx, &batches); err != nil {
+	// We decode into an anonymous struct temporarily since it's an aggregation result
+	var results []struct {
+		StockId    string           `bson:"stockId"`
+		MedicineId string           `bson:"medicineId"`
+		BranchId   string           `bson:"branchId"`
+		Quantity   int              `bson:"quantity"`
+		BatchInfo  dto.MedicineBatch `bson:"batchInfo"`
+	}
+	if err = cursor.All(ctx, &results); err != nil {
 		return nil, err
 	}
 
 	// Gather medicine names
 	medicineIDs := make([]string, 0)
 	seen := map[string]bool{}
-	for _, b := range batches {
-		if !seen[b.MedicineID] {
-			medicineIDs = append(medicineIDs, b.MedicineID)
-			seen[b.MedicineID] = true
+	for _, r := range results {
+		if !seen[r.MedicineId] {
+			medicineIDs = append(medicineIDs, r.MedicineId)
+			seen[r.MedicineId] = true
 		}
 	}
 	nameMap, err := DB_GetMedicineNamesByIDs(medicineIDs)
@@ -149,17 +167,17 @@ func DB_GetExpiryAlerts(branchId string, days int) ([]dto.ExpiryAlertItem, error
 
 	var alerts []dto.ExpiryAlertItem
 	now := time.Now()
-	for _, b := range batches {
-		daysLeft := int(b.ExpiryDate.Sub(now).Hours() / 24)
+	for _, r := range results {
+		daysLeft := int(r.BatchInfo.ExpiryDate.Sub(now).Hours() / 24)
 		alerts = append(alerts, dto.ExpiryAlertItem{
-			BatchID:      b.ID.Hex(),
-			MedicineID:   b.MedicineID,
-			MedicineName: nameMap[b.MedicineID],
-			BatchNumber:  b.BatchNumber,
-			ExpiryDate:   b.ExpiryDate,
-			Quantity:     b.Quantity,
+			BatchID:      r.BatchInfo.BatchId,
+			MedicineID:   r.MedicineId,
+			MedicineName: nameMap[r.MedicineId],
+			BatchNumber:  r.BatchInfo.BatchNumber,
+			ExpiryDate:   r.BatchInfo.ExpiryDate,
+			Quantity:     r.Quantity,
 			DaysToExpiry: daysLeft,
-			BranchId:     b.BranchId,
+			BranchId:     r.BranchId,
 		})
 	}
 	return alerts, nil
@@ -274,26 +292,26 @@ func DB_CompleteStockTransfer(transferID primitive.ObjectID) error {
 	}
 
 	for _, item := range transfer.Items {
-		batchObjID, err := primitive.ObjectIDFromHex(item.BatchId)
+		// 1. Atomically deduct from source BranchStock
+		var srcStock dto.BranchStock
+		err := dbConfigs.BranchStockCollection.FindOne(ctx, bson.M{"stockId": item.StockId, "branchId": transfer.FromBranchId}).Decode(&srcStock)
 		if err != nil {
-			return fmt.Errorf("invalid batchId %s: %v", item.BatchId, err)
+			return fmt.Errorf("invalid stockId %s in source branch: %v", item.StockId, err)
 		}
 
-		// Atomically deduct from source batch
-		filter := bson.M{"_id": batchObjID, "quantity": bson.M{"$gte": item.Quantity}}
-		update := bson.M{"$inc": bson.M{"quantity": -item.Quantity}}
+		filter := bson.M{"_id": srcStock.ID, "quantity": bson.M{"$gte": item.Quantity}}
+		update := bson.M{
+			"$inc": bson.M{"quantity": -item.Quantity},
+			"$set": bson.M{"updatedAt": time.Now()},
+		}
 		opts := options.FindOneAndUpdate().SetReturnDocument(options.After)
-		var srcBatch dto.MedicineBatchModel
-		if err := dbConfigs.MedicineBatchCollection.FindOneAndUpdate(ctx, filter, update, opts).Decode(&srcBatch); err != nil {
-			return fmt.Errorf("insufficient stock in batch %s: %v", item.BatchId, err)
+		if err := dbConfigs.BranchStockCollection.FindOneAndUpdate(ctx, filter, update, opts).Decode(&srcStock); err != nil {
+			return fmt.Errorf("insufficient stock in source branch for stockId %s", item.StockId)
 		}
 
 		// ── Write TRANSFER_OUT movement on source branch ──
-		outMovId, err := GenerateId(ctx, "stock_movements", "MOV")
-		if err != nil {
-			return fmt.Errorf("failed to generate out-movement id: %v", err)
-		}
-		outMovement := dto.StockMovementModel{
+		outMovId, _ := GenerateId(ctx, "stock_movements", "MOV")
+		_ = DB_CreateStockMovement(dto.StockMovementModel{
 			ID:            primitive.NewObjectID(),
 			MovementId:    outMovId,
 			BatchId:       item.BatchId,
@@ -305,43 +323,32 @@ func DB_CompleteStockTransfer(transferID primitive.ObjectID) error {
 			ReferenceType: "TRANSFER",
 			Notes:         fmt.Sprintf("Transfer out to branch %s", transfer.ToBranchId),
 			CreatedAt:     time.Now(),
-		}
-		if err := DB_CreateStockMovement(outMovement); err != nil {
-			return fmt.Errorf("deducted stock but failed to write TRANSFER_OUT movement: %v", err)
-		}
+		})
 
-		// Create a new batch in the target branch
-		newBatchId, err := GenerateId(ctx, "medicine_batches", "BAT")
-		if err != nil {
-			return err
+		// 2. Add stock to target BranchStock (Upsert)
+		targetStockId, _ := GenerateId(ctx, "branch_stock", "STK")
+		targetFilter := bson.M{"batchId": item.BatchId, "branchId": transfer.ToBranchId}
+		targetUpdate := bson.M{
+			"$inc": bson.M{"quantity": item.Quantity},
+			"$setOnInsert": bson.M{
+				"_id":              primitive.NewObjectID(),
+				"stockId":          targetStockId,
+				"medicineId":       item.MedicineID,
+				"reservedQuantity": 0,
+			},
+			"$set": bson.M{"updatedAt": time.Now()},
 		}
-		newBatch := dto.MedicineBatchModel{
-			ID:              primitive.NewObjectID(),
-			MedicineBatchId: newBatchId,
-			MedicineID:      item.MedicineID,
-			Quantity:        item.Quantity,
-			ExpiryDate:      srcBatch.ExpiryDate,
-			BuyingPrice:     srcBatch.BuyingPrice,
-			SellingPrice:    srcBatch.SellingPrice,
-			Status:          "ACTIVE",
-			BatchNumber:     item.BatchNumber,
-			BranchId:        transfer.ToBranchId,
-			Notes:           fmt.Sprintf("Transferred from branch %s via transfer %s", transfer.FromBranchId, transfer.TransferId),
-			CreatedAt:       time.Now(),
-		}
-		if _, err := dbConfigs.MedicineBatchCollection.InsertOne(ctx, newBatch); err != nil {
-			return err
+		upsertOpt := options.Update().SetUpsert(true)
+		if _, err := dbConfigs.BranchStockCollection.UpdateOne(ctx, targetFilter, targetUpdate, upsertOpt); err != nil {
+			return fmt.Errorf("failed to add stock to target branch: %v", err)
 		}
 
 		// ── Write TRANSFER_IN movement on destination branch ──
-		inMovId, err := GenerateId(ctx, "stock_movements", "MOV")
-		if err != nil {
-			return fmt.Errorf("failed to generate in-movement id: %v", err)
-		}
-		inMovement := dto.StockMovementModel{
+		inMovId, _ := GenerateId(ctx, "stock_movements", "MOV")
+		_ = DB_CreateStockMovement(dto.StockMovementModel{
 			ID:            primitive.NewObjectID(),
 			MovementId:    inMovId,
-			BatchId:       newBatchId,
+			BatchId:       item.BatchId,
 			MedicineId:    item.MedicineID,
 			BranchId:      transfer.ToBranchId,
 			Type:          dto.MovementTransferIn,
@@ -350,11 +357,9 @@ func DB_CompleteStockTransfer(transferID primitive.ObjectID) error {
 			ReferenceType: "TRANSFER",
 			Notes:         fmt.Sprintf("Transfer in from branch %s", transfer.FromBranchId),
 			CreatedAt:     time.Now(),
-		}
-		if err := DB_CreateStockMovement(inMovement); err != nil {
-			return fmt.Errorf("batch created but failed to write TRANSFER_IN movement: %v", err)
-		}
+		})
 	}
+
 
 	// Mark transfer as COMPLETED
 	_, err = dbConfigs.StockTransferCollection.UpdateOne(ctx,

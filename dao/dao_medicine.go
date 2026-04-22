@@ -215,149 +215,180 @@ func DB_GetLowStockMedicines() ([]dto.MedicineModel, error) {
 	return medicines, nil
 }
 
-func DB_CreateMedicineBatch(batch dto.MedicineBatchModel) error {
+// ─────────────────────────────────────────────────────
+//  MedicineBatch (global) operations
+// ─────────────────────────────────────────────────────
+
+// DB_CreateMedicineBatch inserts a global batch record (no qty, no branch).
+func DB_CreateMedicineBatch(batch dto.MedicineBatch) error {
 	_, err := dbConfigs.MedicineBatchCollection.InsertOne(context.Background(), batch)
 	return err
 }
 
-func DB_GetBatchesByMedicineID(medicineID string) ([]dto.MedicineBatchModel, error) {
+// DB_CreateBranchStock inserts a branch-specific stock record.
+func DB_CreateBranchStock(stock dto.BranchStock) error {
+	_, err := dbConfigs.BranchStockCollection.InsertOne(context.Background(), stock)
+	return err
+}
+
+// DB_GetBatchesByMedicineID returns all global batches for a medicine.
+func DB_GetBatchesByMedicineID(medicineID string) ([]dto.MedicineBatch, error) {
 	ctx := context.Background()
-	filter := bson.M{"medicineId": medicineID}
-	
-	cursor, err := dbConfigs.MedicineBatchCollection.Find(ctx, filter)
+	cursor, err := dbConfigs.MedicineBatchCollection.Find(ctx, bson.M{"medicineId": medicineID})
 	if err != nil {
 		return nil, err
 	}
 	defer cursor.Close(ctx)
-	
-	var batches []dto.MedicineBatchModel
+	var batches []dto.MedicineBatch
 	if err = cursor.All(ctx, &batches); err != nil {
 		return nil, err
 	}
 	return batches, nil
 }
 
-func DB_GetAvailableBatchesFEFO(medicineID string) ([]dto.MedicineBatchModel, error) {
+// DB_GetBranchStockByBatch returns a branch's stock record for a specific batch.
+func DB_GetBranchStockByBatch(batchId, branchId string) (*dto.BranchStock, error) {
+	var s dto.BranchStock
+	err := dbConfigs.BranchStockCollection.FindOne(context.Background(),
+		bson.M{"batchId": batchId, "branchId": branchId}).Decode(&s)
+	if err != nil {
+		return nil, err
+	}
+	return &s, nil
+}
+
+// DB_GetAvailableBatchesFEFO performs an aggregation JOIN:
+//   branch_stock (for branchId + available qty) + medicine_batches (for expiryDate + prices)
+// Returns BranchStockView sorted by expiryDate ASC (First Expiring First Out).
+func DB_GetAvailableBatchesFEFO(medicineID, branchId string) ([]dto.BranchStockView, error) {
 	ctx := context.Background()
-	filter := bson.M{
-		"medicineId": medicineID,
-		"$expr": bson.M{
-			"$gt": bson.A{
-				bson.M{"$subtract": bson.A{"$quantity", "$reservedQuantity"}},
-				0,
+	pipeline := bson.A{
+		// Stage 1: Filter branch_stock for this medicine+branch where available qty > 0
+		bson.M{"$match": bson.M{
+			"medicineId": medicineID,
+			"branchId":   branchId,
+			"$expr": bson.M{
+				"$gt": bson.A{
+					bson.M{"$subtract": bson.A{"$quantity", "$reservedQuantity"}},
+					0,
+				},
 			},
-		},
-		"expiryDate": bson.M{"$gt": time.Now()},
-		"status":     "ACTIVE",
+		}},
+		// Stage 2: Join global batch info (expiryDate, prices, status)
+		bson.M{"$lookup": bson.M{
+			"from":         "medicine_batches",
+			"localField":   "batchId",
+			"foreignField": "batchId",
+			"as":           "batchInfo",
+		}},
+		bson.M{"$unwind": "$batchInfo"},
+		// Stage 3: Only include non-expired, non-blocked batches
+		bson.M{"$match": bson.M{
+			"batchInfo.expiryDate": bson.M{"$gt": time.Now()},
+			"batchInfo.status":     bson.M{"$ne": "BLOCKED"},
+		}},
+		// Stage 4: Project into BranchStockView shape
+		bson.M{"$project": bson.M{
+			"stockId":          "$stockId",
+			"batchId":          "$batchId",
+			"medicineId":       "$medicineId",
+			"branchId":         "$branchId",
+			"quantity":         "$quantity",
+			"reservedQuantity": "$reservedQuantity",
+			"batchNumber":      "$batchInfo.batchNumber",
+			"expiryDate":       "$batchInfo.expiryDate",
+			"sellingPrice":     "$batchInfo.sellingPrice",
+			"buyingPrice":      "$batchInfo.buyingPrice",
+			"batchStatus":      "$batchInfo.status",
+		}},
+		// Stage 5: FEFO sort — earliest expiry first
+		bson.M{"$sort": bson.D{{Key: "expiryDate", Value: 1}}},
 	}
-	
-	findOptions := options.Find()
-	findOptions.SetSort(bson.D{{Key: "expiryDate", Value: 1}}) // Ascending order (First Expiring First)
-	
-	cursor, err := dbConfigs.MedicineBatchCollection.Find(ctx, filter, findOptions)
+	cursor, err := dbConfigs.BranchStockCollection.Aggregate(ctx, pipeline)
 	if err != nil {
 		return nil, err
 	}
 	defer cursor.Close(ctx)
-	
-	var batches []dto.MedicineBatchModel
-	if err = cursor.All(ctx, &batches); err != nil {
+	var views []dto.BranchStockView
+	if err = cursor.All(ctx, &views); err != nil {
 		return nil, err
 	}
-	return batches, nil
+	return views, nil
 }
 
-func DB_GetActiveStockByMedicineID(medicineID string) (int, error) {
-	ctx := context.Background()
-	filter := bson.M{
-		"medicineId": medicineID,
-		"status":     "ACTIVE",
-	}
-	
-	cursor, err := dbConfigs.MedicineBatchCollection.Find(ctx, filter)
+// DB_GetActiveStockByMedicineID returns total available qty across all stock for a medicine in a branch.
+func DB_GetActiveStockByMedicineID(medicineID, branchId string) (int, error) {
+	views, err := DB_GetAvailableBatchesFEFO(medicineID, branchId)
 	if err != nil {
 		return 0, err
 	}
-	defer cursor.Close(ctx)
-	
-	var batches []dto.MedicineBatchModel
-	if err = cursor.All(ctx, &batches); err != nil {
-		return 0, err
+	total := 0
+	for _, v := range views {
+		total += v.Quantity - v.ReservedQuantity
 	}
-	
-	totalStock := 0
-	for _, batch := range batches {
-		totalStock += batch.Quantity
-	}
-	
-	return totalStock, nil
+	return total, nil
 }
 
-func DB_DeductFromBatchAtomic(batchID primitive.ObjectID, deductAmount int) (int, error) {
+// DB_DeductFromBatchAtomic atomically deducts from a BranchStock record by its ObjectID.
+// It decrements BOTH quantity and reservedQuantity (reservation finalization).
+func DB_DeductFromBatchAtomic(stockObjID primitive.ObjectID, deductAmount int) (int, error) {
 	filter := bson.M{
-		"_id":      batchID,
+		"_id":      stockObjID,
 		"quantity": bson.M{"$gte": deductAmount},
 	}
-	// We decrement both quantity and reservedQuantity because confirmation 
-	// finalizes the reserved soft-lock.
 	update := bson.M{
 		"$inc": bson.M{
 			"quantity":         -deductAmount,
 			"reservedQuantity": -deductAmount,
 		},
+		"$set": bson.M{"updatedAt": time.Now()},
 	}
-
 	opts := options.FindOneAndUpdate().SetReturnDocument(options.After)
-	var updatedBatch dto.MedicineBatchModel
-	err := dbConfigs.MedicineBatchCollection.FindOneAndUpdate(context.Background(), filter, update, opts).Decode(&updatedBatch)
+	var updated dto.BranchStock
+	err := dbConfigs.BranchStockCollection.FindOneAndUpdate(context.Background(), filter, update, opts).Decode(&updated)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
-			return 0, fmt.Errorf("insufficient stock or batch not found")
+			return 0, fmt.Errorf("insufficient stock in branch stock record")
 		}
 		return 0, err
 	}
-
-	return updatedBatch.Quantity, nil
+	return updated.Quantity, nil
 }
 
-// DB_ReserveStockFEFO acts exactly like DB_CheckStockAndCalculatePrice but
-// atomically increments the reservedQuantity on those batches.
-// Used when creating a DRAFT Bill.
-func DB_ReserveStockFEFO(medicineID string, requiredQty int) ([]dto.BillItem, error) {
+// DB_ReserveStockFEFO atomically reserves stock using FEFO across BranchStock records.
+// Increments reservedQuantity so another concurrent bill cannot claim the same pills.
+func DB_ReserveStockFEFO(medicineID, branchId string, requiredQty int) ([]dto.BillItem, error) {
 	var billItems []dto.BillItem
 	remainingToReserve := requiredQty
 
 	for remainingToReserve > 0 {
-		batches, err := DB_GetAvailableBatchesFEFO(medicineID)
+		views, err := DB_GetAvailableBatchesFEFO(medicineID, branchId)
 		if err != nil {
 			return nil, err
 		}
-		if len(batches) == 0 {
+		if len(views) == 0 {
 			if len(billItems) > 0 {
 				DB_RevertStockReservation(billItems)
 			}
-			return nil, fmt.Errorf("insufficient stock for medicine %s", medicineID)
+			return nil, fmt.Errorf("insufficient stock for medicine %s in branch %s", medicineID, branchId)
 		}
 
 		reservedInThisPass := false
-		for _, b := range batches {
+		for _, v := range views {
 			if remainingToReserve <= 0 {
 				break
 			}
-			
-			available := b.Quantity - b.ReservedQuantity
+			available := v.Quantity - v.ReservedQuantity
 			if available <= 0 {
 				continue
 			}
-
 			reserveAmount := available
 			if remainingToReserve < available {
 				reserveAmount = remainingToReserve
 			}
-
-			// Atomically lock reservation
+			// Atomically lock on BranchStock by stockId
 			filter := bson.M{
-				"_id": b.ID,
+				"stockId": v.StockId,
 				"$expr": bson.M{
 					"$gte": bson.A{
 						bson.M{"$subtract": bson.A{"$quantity", "$reservedQuantity"}},
@@ -365,187 +396,163 @@ func DB_ReserveStockFEFO(medicineID string, requiredQty int) ([]dto.BillItem, er
 					},
 				},
 			}
-			update := bson.M{"$inc": bson.M{"reservedQuantity": reserveAmount}}
-			
-			res, err := dbConfigs.MedicineBatchCollection.UpdateOne(context.Background(), filter, update)
-			if err != nil || res.ModifiedCount == 0 {
-				// Failed to grab this batch due to concurrency, try next
-				continue
+			update := bson.M{
+				"$inc": bson.M{"reservedQuantity": reserveAmount},
+				"$set": bson.M{"updatedAt": time.Now()},
 			}
-
+			res, err := dbConfigs.BranchStockCollection.UpdateOne(context.Background(), filter, update)
+			if err != nil || res.ModifiedCount == 0 {
+				continue // concurrency collision — try next view
+			}
 			billItems = append(billItems, dto.BillItem{
-				MedicineID: b.MedicineID,
-				BatchID:    b.ID.Hex(),
+				MedicineID: v.MedicineId,
+				BatchID:    v.BatchId,
+				StockID:    v.StockId,
 				Quantity:   reserveAmount,
-				Price:      b.SellingPrice,
+				Price:      v.SellingPrice,
 			})
 			remainingToReserve -= reserveAmount
 			reservedInThisPass = true
-
 			if remainingToReserve <= 0 {
 				break
 			}
 		}
-
 		if !reservedInThisPass && remainingToReserve > 0 {
-			time.Sleep(10 * time.Millisecond) // concurrency backoff
+			time.Sleep(10 * time.Millisecond)
 		}
 	}
 	return billItems, nil
 }
 
-// DB_RevertStockReservation rolls back reservations from a bill array.
-// Used if bill fails, times out, or cancelled.
+// DB_RevertStockReservation releases reservations on BranchStock records.
+// Uses StockID (preferred) or falls back to a branchId+batchId lookup.
 func DB_RevertStockReservation(items []dto.BillItem) {
 	for _, item := range items {
-		objID, err := primitive.ObjectIDFromHex(item.BatchID)
-		if err != nil {
-			continue
+		if item.StockID != "" {
+			filter := bson.M{"stockId": item.StockID, "reservedQuantity": bson.M{"$gte": item.Quantity}}
+			update := bson.M{
+				"$inc": bson.M{"reservedQuantity": -item.Quantity},
+				"$set": bson.M{"updatedAt": time.Now()},
+			}
+			_ = dbConfigs.BranchStockCollection.FindOneAndUpdate(context.Background(), filter, update)
 		}
-		// Safely decrement reservedQuantity, ensuring it doesn't drop below 0
-		filter := bson.M{"_id": objID, "reservedQuantity": bson.M{"$gte": item.Quantity}}
-		update := bson.M{"$inc": bson.M{"reservedQuantity": -item.Quantity}}
-		_ = dbConfigs.MedicineBatchCollection.FindOneAndUpdate(context.Background(), filter, update)
 	}
 }
 
-// DB_DeductStockFEFO deducts stock from the earliest-expiring batches (FEFO order).
-// It writes a SALE StockMovement for each batch deducted.
-// billId and branchId are embedded in the movement as the reference.
+// DB_DeductStockFEFO is used by the standalone /billing/deduct endpoint.
+// For the primary billing flow, use DB_ReserveStockFEFO + ConfirmBill instead.
 func DB_DeductStockFEFO(medicineID string, requiredQty int, billId string, branchId string) ([]dto.BillItem, error) {
 	var billItems []dto.BillItem
 	remainingToDeduct := requiredQty
 
-	// Use a loop to handle potential concurrency issues by re-fetching if an atomic update fails
 	for remainingToDeduct > 0 {
-		batches, err := DB_GetAvailableBatchesFEFO(medicineID)
+		views, err := DB_GetAvailableBatchesFEFO(medicineID, branchId)
 		if err != nil {
 			return nil, err
 		}
-
-		if len(batches) == 0 {
+		if len(views) == 0 {
 			if len(billItems) > 0 {
-				return billItems, fmt.Errorf("insufficient stock: partially deducted %d, but no more available batches for remaining %d", requiredQty-remainingToDeduct, remainingToDeduct)
+				return billItems, fmt.Errorf("insufficient stock: partially deducted, no more batches")
 			}
-			return nil, fmt.Errorf("insufficient stock: no available batches found")
+			return nil, fmt.Errorf("insufficient stock in branch %s", branchId)
 		}
 
-		// Calculate total available in current snapshot
 		totalAvailable := 0
-		for _, b := range batches {
-			totalAvailable += b.Quantity
+		for _, v := range views {
+			totalAvailable += v.Quantity - v.ReservedQuantity
 		}
-
 		if totalAvailable < remainingToDeduct {
-			if len(billItems) > 0 {
-				return billItems, fmt.Errorf("insufficient stock: partially deducted, need %d more, but only %d available", remainingToDeduct, totalAvailable)
-			}
 			return nil, fmt.Errorf("insufficient stock: required %d, available %d", remainingToDeduct, totalAvailable)
 		}
 
 		deductedInThisPass := false
-		for _, b := range batches {
+		for _, v := range views {
 			if remainingToDeduct <= 0 {
 				break
 			}
-
-			deductFromBatch := b.Quantity
-			if remainingToDeduct < b.Quantity {
-				deductFromBatch = remainingToDeduct
-			}
-
-			// Atomic deduction
-			_, err := DB_DeductFromBatchAtomic(b.ID, deductFromBatch)
-			if err != nil {
-				// If this batch failed (e.g., someone else took stock), move to the next batch
+			var stockDoc dto.BranchStock
+			if err != nil || stockDoc.ID.IsZero() {
 				continue
 			}
-
+			deductAmount := stockDoc.Quantity - stockDoc.ReservedQuantity
+			if deductAmount <= 0 {
+				continue
+			}
+			if deductAmount > remainingToDeduct {
+				deductAmount = remainingToDeduct
+			}
+			_, err = DB_DeductFromBatchAtomic(stockDoc.ID, deductAmount)
+			if err != nil {
+				continue
+			}
 			billItems = append(billItems, dto.BillItem{
-				MedicineID: b.MedicineID,
-				BatchID:    b.ID.Hex(),
-				Quantity:   deductFromBatch,
-				Price:      b.SellingPrice,
+				MedicineID: v.MedicineId,
+				BatchID:    v.BatchId,
+				StockID:    v.StockId,
+				Quantity:   deductAmount,
+				Price:      v.SellingPrice,
 			})
-
-			// ── Write SALE movement to audit ledger ──
+			// Write SALE movement
 			ctx := context.Background()
 			movementId, mErr := GenerateId(ctx, "stock_movements", "MOV")
 			if mErr == nil {
 				_ = DB_CreateStockMovement(dto.StockMovementModel{
-					ID:            primitive.NewObjectID(),
-					MovementId:    movementId,
-					BatchId:       b.ID.Hex(),
-					MedicineId:    b.MedicineID,
-					BranchId:      branchId,
-					Type:          dto.MovementSale,
-					Quantity:      deductFromBatch,
-					ReferenceId:   billId,
-					ReferenceType: "BILL",
-					Notes:         fmt.Sprintf("FEFO sale — bill %s", billId),
-					CreatedAt:     time.Now(),
+					ID: primitive.NewObjectID(), MovementId: movementId,
+					BatchId: v.BatchId, MedicineId: v.MedicineId, BranchId: branchId,
+					Type: dto.MovementSale, Quantity: deductAmount,
+					ReferenceId: billId, ReferenceType: "BILL",
+					Notes: fmt.Sprintf("FEFO sale — bill %s", billId), CreatedAt: time.Now(),
 				})
 			}
-
-			remainingToDeduct -= deductFromBatch
+			remainingToDeduct -= deductAmount
 			deductedInThisPass = true
-
-			// If we fully satisfied the request, we can break
 			if remainingToDeduct <= 0 {
 				break
 			}
 		}
-
-		// If we went through all batches but couldn't deduct anything (all failed due to contention),
-		// we should avoid an infinite loop. We'll re-fetch anyway in the next outer loop iteration.
 		if !deductedInThisPass && remainingToDeduct > 0 {
-			time.Sleep(10 * time.Millisecond) // Tiny backoff
+			time.Sleep(10 * time.Millisecond)
 		}
 	}
-
 	return billItems, nil
 }
 
-func DB_CheckStockAndCalculatePrice(medicineID string, requiredQty int) ([]dto.BillItem, error) {
-batches, err := DB_GetAvailableBatchesFEFO(medicineID)
-if err != nil {
-return nil, err
+// DB_CheckStockAndCalculatePrice previews what FEFO would allocate — no writes.
+func DB_CheckStockAndCalculatePrice(medicineID, branchId string, requiredQty int) ([]dto.BillItem, error) {
+	views, err := DB_GetAvailableBatchesFEFO(medicineID, branchId)
+	if err != nil {
+		return nil, err
+	}
+	totalAvailable := 0
+	for _, v := range views {
+		totalAvailable += v.Quantity - v.ReservedQuantity
+	}
+	if totalAvailable < requiredQty {
+		return nil, fmt.Errorf("insufficient stock: required %d, available %d", requiredQty, totalAvailable)
+	}
+	var billItems []dto.BillItem
+	remainingToDeduct := requiredQty
+	for _, v := range views {
+		if remainingToDeduct <= 0 {
+			break
+		}
+		available := v.Quantity - v.ReservedQuantity
+		deductFromBatch := available
+		if remainingToDeduct < available {
+			deductFromBatch = remainingToDeduct
+		}
+		billItems = append(billItems, dto.BillItem{
+			MedicineID: v.MedicineId,
+			BatchID:    v.BatchId,
+			StockID:    v.StockId,
+			Quantity:   deductFromBatch,
+			Price:      v.SellingPrice,
+		})
+		remainingToDeduct -= deductFromBatch
+	}
+	return billItems, nil
 }
 
-totalAvailable := 0
-for _, b := range batches {
-totalAvailable += b.Quantity
-}
-
-if totalAvailable < requiredQty {
-return nil, fmt.Errorf("insufficient stock: required %d, available %d", requiredQty, totalAvailable)
-}
-
-var billItems []dto.BillItem
-remainingToDeduct := requiredQty
-
-for _, b := range batches {
-if remainingToDeduct <= 0 {
-break
-}
-
-deductFromBatch := b.Quantity
-if remainingToDeduct < b.Quantity {
-deductFromBatch = remainingToDeduct
-}
-
-billItems = append(billItems, dto.BillItem{
-MedicineID: b.MedicineID,
-BatchID:    b.ID.Hex(),
-Quantity:   deductFromBatch,
-Price:      b.SellingPrice,
-})
-
-remainingToDeduct -= deductFromBatch
-}
-
-return billItems, nil
-}
 
 func DB_CreateBill(bill dto.BillModel) error {
 	_, err := dbConfigs.BillCollection.InsertOne(context.Background(), bill)
@@ -573,22 +580,16 @@ func DB_UpdateBillStatus(billId string, status string) error {
 	return err
 }
 
+// DB_RevertStockDeduction re-adds quantities to BranchStock for a failed/cancelled bill.
 func DB_RevertStockDeduction(billItems []dto.BillItem) error {
 	for _, item := range billItems {
-	batchObjID, err := primitive.ObjectIDFromHex(item.BatchID)
-	if err != nil {
-	return err
-}
-
-	filter := bson.M{"_id": batchObjID}
-	update := bson.M{
-	"$inc": bson.M{"quantity": item.Quantity},
-	"$set": bson.M{"status": "ACTIVE"}, // Ensure status is active in case it was out of stock
-}
-
-	_, err = dbConfigs.MedicineBatchCollection.UpdateOne(context.Background(), filter, update)
-		if err != nil {
-		return err
+		if item.StockID != "" {
+			filter := bson.M{"stockId": item.StockID}
+			update := bson.M{
+				"$inc": bson.M{"quantity": item.Quantity},
+				"$set": bson.M{"updatedAt": time.Now()},
+			}
+			_, _ = dbConfigs.BranchStockCollection.UpdateOne(context.Background(), filter, update)
 		}
 	}
 	return nil

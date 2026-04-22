@@ -49,6 +49,7 @@ type TransferItem struct {
 	MedicineID   string `json:"medicineId" bson:"medicineId"`
 	MedicineName string `json:"medicineName" bson:"medicineName"`
 	BatchId      string `json:"batchId" bson:"batchId"`
+	StockId      string `json:"stockId" bson:"stockId"` // FK → BranchStock (source branch)
 	BatchNumber  string `json:"batchNumber" bson:"batchNumber"`
 	Quantity     int    `json:"quantity" bson:"quantity"`
 }
