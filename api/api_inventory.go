@@ -133,3 +133,21 @@ func CancelStockTransfer(c *fiber.Ctx) error {
 	}
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Stock transfer cancelled"})
 }
+
+// ApproveStockTransfer transitions a transfer from PENDING → APPROVED.
+// Must be called before CompleteStockTransfer.
+//
+// PATCH /stock-transfers/:id/approve
+func ApproveStockTransfer(c *fiber.Ctx) error {
+	id := c.Params("id")
+	objectID, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid transfer ID"})
+	}
+	approvedBy, _ := c.Locals("uid").(string)
+	if err := dao.DB_ApproveStockTransfer(objectID, approvedBy); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Failed to approve transfer: " + err.Error()})
+	}
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Stock transfer approved — can now be completed"})
+}
+

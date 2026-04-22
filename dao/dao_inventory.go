@@ -13,6 +13,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
+
 // ──────────────────────────────────────────────
 //  Stock Valuation
 // ──────────────────────────────────────────────
@@ -214,8 +215,9 @@ func DB_SearchStockTransfers(query dto.SearchTransferQuery) ([]dto.StockTransfer
 	return transfers, total, nil
 }
 
-// DB_CompleteStockTransfer deducts stock from source batches and creates new batches in the target branch.
-func DB_CompleteStockTransfer(transferID primitive.ObjectID) error {
+// DB_ApproveStockTransfer transitions a transfer from PENDING → APPROVED
+// and creates an Approval record so execution can gate on it.
+func DB_ApproveStockTransfer(transferID primitive.ObjectID, approvedBy string) error {
 	ctx := context.Background()
 
 	transfer, err := DB_GetStockTransferByID(transferID)
@@ -226,13 +228,58 @@ func DB_CompleteStockTransfer(transferID primitive.ObjectID) error {
 		return fmt.Errorf("transfer is already %s", transfer.Status)
 	}
 
+	// Update status to APPROVED
+	_, err = dbConfigs.StockTransferCollection.UpdateOne(ctx,
+		bson.M{"_id": transferID},
+		bson.M{"$set": bson.M{"status": "APPROVED", "updatedAt": time.Now()}})
+	if err != nil {
+		return err
+	}
+
+	// Create approval record
+	approvalId, err := GenerateId(ctx, "approvals", "APR")
+	if err != nil {
+		return fmt.Errorf("transfer approved but failed to generate approval id: %v", err)
+	}
+	return DB_CreateApproval(dto.ApprovalModel{
+		ID:            primitive.NewObjectID(),
+		ApprovalId:    approvalId,
+		ReferenceType: dto.ApprovalRefTransfer,
+		ReferenceId:   transfer.TransferId,
+		Status:        dto.ApprovalApproved,
+		ApprovedBy:    approvedBy,
+		ApprovedAt:    time.Now(),
+		CreatedAt:     time.Now(),
+	})
+}
+
+// DB_CompleteStockTransfer executes an APPROVED transfer:
+//  1. Deducts qty from each source batch (TRANSFER_OUT movement)
+//  2. Creates a new batch in the target branch (TRANSFER_IN movement)
+//  3. Marks the transfer as COMPLETED
+func DB_CompleteStockTransfer(transferID primitive.ObjectID) error {
+	ctx := context.Background()
+
+	transfer, err := DB_GetStockTransferByID(transferID)
+	if err != nil {
+		return err
+	}
+
+	// ── Approval gate: transfer must be APPROVED before execution ──
+	if transfer.Status != "APPROVED" {
+		if transfer.Status == "PENDING" {
+			return fmt.Errorf("transfer must be APPROVED before completion; call /stock-transfers/%s/approve first", transferID.Hex())
+		}
+		return fmt.Errorf("transfer is already %s", transfer.Status)
+	}
+
 	for _, item := range transfer.Items {
 		batchObjID, err := primitive.ObjectIDFromHex(item.BatchId)
 		if err != nil {
 			return fmt.Errorf("invalid batchId %s: %v", item.BatchId, err)
 		}
 
-		// Deduct from source batch atomically
+		// Atomically deduct from source batch
 		filter := bson.M{"_id": batchObjID, "quantity": bson.M{"$gte": item.Quantity}}
 		update := bson.M{"$inc": bson.M{"quantity": -item.Quantity}}
 		opts := options.FindOneAndUpdate().SetReturnDocument(options.After)
@@ -245,6 +292,28 @@ func DB_CompleteStockTransfer(transferID primitive.ObjectID) error {
 			_, _ = dbConfigs.MedicineBatchCollection.UpdateOne(ctx,
 				bson.M{"_id": batchObjID},
 				bson.M{"$set": bson.M{"status": "OUT_OF_STOCK"}})
+		}
+
+		// ── Write TRANSFER_OUT movement on source branch ──
+		outMovId, err := GenerateId(ctx, "stock_movements", "MOV")
+		if err != nil {
+			return fmt.Errorf("failed to generate out-movement id: %v", err)
+		}
+		outMovement := dto.StockMovementModel{
+			ID:            primitive.NewObjectID(),
+			MovementId:    outMovId,
+			BatchId:       item.BatchId,
+			MedicineId:    item.MedicineID,
+			BranchId:      transfer.FromBranchId,
+			Type:          dto.MovementTransferOut,
+			Quantity:      item.Quantity,
+			ReferenceId:   transfer.TransferId,
+			ReferenceType: "TRANSFER",
+			Notes:         fmt.Sprintf("Transfer out to branch %s", transfer.ToBranchId),
+			CreatedAt:     time.Now(),
+		}
+		if err := DB_CreateStockMovement(outMovement); err != nil {
+			return fmt.Errorf("deducted stock but failed to write TRANSFER_OUT movement: %v", err)
 		}
 
 		// Create a new batch in the target branch
@@ -269,9 +338,31 @@ func DB_CompleteStockTransfer(transferID primitive.ObjectID) error {
 		if _, err := dbConfigs.MedicineBatchCollection.InsertOne(ctx, newBatch); err != nil {
 			return err
 		}
+
+		// ── Write TRANSFER_IN movement on destination branch ──
+		inMovId, err := GenerateId(ctx, "stock_movements", "MOV")
+		if err != nil {
+			return fmt.Errorf("failed to generate in-movement id: %v", err)
+		}
+		inMovement := dto.StockMovementModel{
+			ID:            primitive.NewObjectID(),
+			MovementId:    inMovId,
+			BatchId:       newBatchId,
+			MedicineId:    item.MedicineID,
+			BranchId:      transfer.ToBranchId,
+			Type:          dto.MovementTransferIn,
+			Quantity:      item.Quantity,
+			ReferenceId:   transfer.TransferId,
+			ReferenceType: "TRANSFER",
+			Notes:         fmt.Sprintf("Transfer in from branch %s", transfer.FromBranchId),
+			CreatedAt:     time.Now(),
+		}
+		if err := DB_CreateStockMovement(inMovement); err != nil {
+			return fmt.Errorf("batch created but failed to write TRANSFER_IN movement: %v", err)
+		}
 	}
 
-	// Mark transfer as completed
+	// Mark transfer as COMPLETED
 	_, err = dbConfigs.StockTransferCollection.UpdateOne(ctx,
 		bson.M{"_id": transferID},
 		bson.M{"$set": bson.M{"status": "COMPLETED", "updatedAt": time.Now()}})

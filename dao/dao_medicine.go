@@ -13,6 +13,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
+
 func DB_CreateMedicine(medicine dto.MedicineModel) error {
 	_, err := dbConfigs.MedicineCollection.InsertOne(context.Background(), medicine)
 	if err != nil {
@@ -279,7 +280,10 @@ func DB_DeductFromBatchAtomic(batchID primitive.ObjectID, deductAmount int) (int
 	return updatedBatch.Quantity, nil
 }
 
-func DB_DeductStockFEFO(medicineID string, requiredQty int) ([]dto.BillItem, error) {
+// DB_DeductStockFEFO deducts stock from the earliest-expiring batches (FEFO order).
+// It writes a SALE StockMovement for each batch deducted.
+// billId and branchId are embedded in the movement as the reference.
+func DB_DeductStockFEFO(medicineID string, requiredQty int, billId string, branchId string) ([]dto.BillItem, error) {
 	var billItems []dto.BillItem
 	remainingToDeduct := requiredQty
 
@@ -335,6 +339,25 @@ func DB_DeductStockFEFO(medicineID string, requiredQty int) ([]dto.BillItem, err
 				Price:      b.SellingPrice,
 			})
 
+			// ── Write SALE movement to audit ledger ──
+			ctx := context.Background()
+			movementId, mErr := GenerateId(ctx, "stock_movements", "MOV")
+			if mErr == nil {
+				_ = DB_CreateStockMovement(dto.StockMovementModel{
+					ID:            primitive.NewObjectID(),
+					MovementId:    movementId,
+					BatchId:       b.ID.Hex(),
+					MedicineId:    b.MedicineID,
+					BranchId:      branchId,
+					Type:          dto.MovementSale,
+					Quantity:      deductFromBatch,
+					ReferenceId:   billId,
+					ReferenceType: "BILL",
+					Notes:         fmt.Sprintf("FEFO sale — bill %s", billId),
+					CreatedAt:     time.Now(),
+				})
+			}
+
 			remainingToDeduct -= deductFromBatch
 			deductedInThisPass = true
 
@@ -353,6 +376,7 @@ func DB_DeductStockFEFO(medicineID string, requiredQty int) ([]dto.BillItem, err
 
 	return billItems, nil
 }
+
 func DB_CheckStockAndCalculatePrice(medicineID string, requiredQty int) ([]dto.BillItem, error) {
 batches, err := DB_GetAvailableBatchesFEFO(medicineID)
 if err != nil {
@@ -468,3 +492,25 @@ func DB_GetMedicineNamesByIDs(medicineIDs []string) (map[string]string, error) {
 	return result, nil
 }
 
+// DB_WriteSaleMovement writes a single SALE StockMovement for a confirmed bill item.
+// This is called from ConfirmBill after each atomic deduction succeeds.
+func DB_WriteSaleMovement(item dto.BillItem, billId string, branchId string) error {
+	ctx := context.Background()
+	movementId, err := GenerateId(ctx, "stock_movements", "MOV")
+	if err != nil {
+		return err
+	}
+	return DB_CreateStockMovement(dto.StockMovementModel{
+		ID:            primitive.NewObjectID(),
+		MovementId:    movementId,
+		BatchId:       item.BatchID,
+		MedicineId:    item.MedicineID,
+		BranchId:      branchId,
+		Type:          dto.MovementSale,
+		Quantity:      item.Quantity,
+		ReferenceId:   billId,
+		ReferenceType: "BILL",
+		Notes:         fmt.Sprintf("Confirmed sale — bill %s", billId),
+		CreatedAt:     time.Now(),
+	})
+}

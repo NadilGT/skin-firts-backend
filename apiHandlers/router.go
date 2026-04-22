@@ -203,6 +203,7 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 	// ========== STOCK TRANSFERS (branch-scoped) ==========
 	app.Post("/stock-transfers", authMiddleware.ValidateToken, BranchMiddleware, api.CreateStockTransfer)
 	app.Get("/stock-transfers", authMiddleware.ValidateToken, BranchMiddleware, api.GetStockTransfers)
+	app.Patch("/stock-transfers/:id/approve", authMiddleware.ValidateToken, BranchMiddleware, RequiresRole("admin"), api.ApproveStockTransfer)
 	app.Patch("/stock-transfers/:id/complete", authMiddleware.ValidateToken, BranchMiddleware, api.CompleteStockTransfer)
 	app.Patch("/stock-transfers/:id/cancel", authMiddleware.ValidateToken, BranchMiddleware, api.CancelStockTransfer)
 
@@ -220,4 +221,27 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 	app.Get("/reports/profit-margin", authMiddleware.ValidateToken, BranchMiddleware, api.GetProfitMarginReport)
 	app.Get("/reports/expiry", authMiddleware.ValidateToken, BranchMiddleware, api.GetExpiryReport)
 	app.Get("/reports/stock", authMiddleware.ValidateToken, BranchMiddleware, api.GetStockReportAnalytics)
+
+	// ========== STOCK MOVEMENTS (audit ledger, read-only) ==========
+	app.Get("/stock-movements", authMiddleware.ValidateToken, BranchMiddleware, api.GetStockMovements)
+	app.Get("/stock-movements/batch/:batchId", authMiddleware.ValidateToken, BranchMiddleware, api.GetMovementsByBatch)
+
+	// ========== REJECT STOCK (expired / damaged / returns) ==========
+	app.Post("/reject-stock", authMiddleware.ValidateToken, BranchMiddleware, api.CreateRejectStock)
+	app.Get("/reject-stock", authMiddleware.ValidateToken, BranchMiddleware, api.GetRejectStocks)
+	app.Get("/reject-stock/:id", authMiddleware.ValidateToken, BranchMiddleware, api.GetRejectStockByID)
+	app.Patch("/reject-stock/:id/approve", authMiddleware.ValidateToken, BranchMiddleware, RequiresRole("admin"), api.ApproveRejectStock)
+	app.Patch("/reject-stock/:id/execute", authMiddleware.ValidateToken, BranchMiddleware, RequiresRole("admin"), api.ExecuteRejectStock)
+
+	// ========== SUPPLIER BILLS (invoices) ==========
+	app.Post("/supplier-bills", authMiddleware.ValidateToken, BranchMiddleware, api.CreateSupplierBill)
+	app.Get("/supplier-bills", authMiddleware.ValidateToken, BranchMiddleware, api.GetSupplierBills)
+	app.Get("/supplier-bills/:id", authMiddleware.ValidateToken, BranchMiddleware, api.GetSupplierBillByID)
+	app.Patch("/supplier-bills/:id/payment", authMiddleware.ValidateToken, BranchMiddleware, api.UpdateSupplierBillPayment)
+
+	// ========== APPROVALS (generic workflow) ==========
+	app.Get("/approvals", authMiddleware.ValidateToken, BranchMiddleware, api.GetApprovals)
+	app.Patch("/approvals/:id/approve", authMiddleware.ValidateToken, RequiresRole("admin"), api.ApproveRecord)
+	app.Patch("/approvals/:id/reject", authMiddleware.ValidateToken, RequiresRole("admin"), api.RejectRecord)
 }
+

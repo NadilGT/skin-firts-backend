@@ -309,7 +309,8 @@ func DeductStockFEFO(c *fiber.Ctx) error {
 		})
 	}
 
-	billItems, err := dao.DB_DeductStockFEFO(req.MedicineID, req.Quantity)
+	branchId, _ := c.Locals("effectiveBranchId").(string)
+	billItems, err := dao.DB_DeductStockFEFO(req.MedicineID, req.Quantity, "", branchId)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Failed to deduct stock: " + err.Error(),
@@ -423,7 +424,7 @@ func CreateBill(c *fiber.Ctx) error {
 
 func ConfirmBill(c *fiber.Ctx) error {
 	billId := c.Query("billId")
-	
+
 	bill, err := dao.DB_GetBillByBillId(billId)
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
@@ -461,6 +462,9 @@ func ConfirmBill(c *fiber.Ctx) error {
 		}
 
 		successfullyDeducted = append(successfullyDeducted, item)
+
+		// Write SALE StockMovement for this confirmed deduction
+		_ = dao.DB_WriteSaleMovement(item, billId, bill.BranchId)
 	}
 
 	// All stock deducted successfully, mark bill as confirmed
@@ -479,3 +483,4 @@ func ConfirmBill(c *fiber.Ctx) error {
 		"data":    bill,
 	})
 }
+

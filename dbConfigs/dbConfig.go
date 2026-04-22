@@ -41,6 +41,12 @@ var PurchaseOrderCollection *mongo.Collection
 var GRNCollection *mongo.Collection
 var StockTransferCollection *mongo.Collection
 
+// ERP/WMS audit + workflow collections
+var StockMovementCollection *mongo.Collection
+var RejectStockCollection *mongo.Collection
+var SupplierBillCollection *mongo.Collection
+var ApprovalCollection *mongo.Collection
+
 func ConnectMongoDB(uri string) *mongo.Client {
 	client, err := mongo.NewClient(options.Client().ApplyURI(uri))
 	if err != nil {
@@ -88,6 +94,12 @@ func ConnectMongoDB(uri string) *mongo.Client {
 	PurchaseOrderCollection = db.Collection("purchase_orders")
 	GRNCollection = db.Collection("grn")
 	StockTransferCollection = db.Collection("stock_transfers")
+
+	// ERP/WMS audit + workflow collections
+	StockMovementCollection = db.Collection("stock_movements")
+	RejectStockCollection = db.Collection("reject_stock")
+	SupplierBillCollection = db.Collection("supplier_bills")
+	ApprovalCollection = db.Collection("approvals")
 
 	return client
 }

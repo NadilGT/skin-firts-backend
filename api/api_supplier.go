@@ -194,8 +194,10 @@ func UpdatePurchaseOrderStatus(c *fiber.Ctx) error {
 	if req.Status == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Status is required"})
 	}
-	if err := dao.DB_UpdatePOStatus(objectID, req); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update PO status"})
+	// Extract caller identity for approval audit trail
+	approvedBy, _ := c.Locals("uid").(string)
+	if err := dao.DB_UpdatePOStatus(objectID, req, approvedBy); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update PO status: " + err.Error()})
 	}
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Purchase order status updated to " + req.Status})
 }

@@ -2,6 +2,7 @@ package dao
 
 import (
 	"context"
+	"fmt"
 	"lawyerSL-Backend/dbConfigs"
 	"lawyerSL-Backend/dto"
 	"time"
@@ -136,7 +137,8 @@ func DB_SearchPurchaseOrders(query dto.SearchPOQuery) ([]dto.PurchaseOrderModel,
 	return pos, total, nil
 }
 
-func DB_UpdatePOStatus(id primitive.ObjectID, req dto.UpdatePOStatusRequest) error {
+func DB_UpdatePOStatus(id primitive.ObjectID, req dto.UpdatePOStatusRequest, approvedBy string) error {
+	ctx := context.Background()
 	filter := bson.M{"_id": id}
 	update := bson.M{
 		"$set": bson.M{
@@ -145,24 +147,62 @@ func DB_UpdatePOStatus(id primitive.ObjectID, req dto.UpdatePOStatusRequest) err
 			"updatedAt": time.Now(),
 		},
 	}
-	_, err := dbConfigs.PurchaseOrderCollection.UpdateOne(context.Background(), filter, update)
-	return err
+	_, err := dbConfigs.PurchaseOrderCollection.UpdateOne(ctx, filter, update)
+	if err != nil {
+		return err
+	}
+
+	// When a PO is approved, create an Approval record so GRN can gate on it
+	if req.Status == "APPROVED" {
+		// Fetch the PO to get its business ID
+		po, poErr := DB_GetPurchaseOrderByID(id)
+		if poErr == nil && po != nil {
+			approvalId, aErr := GenerateId(ctx, "approvals", "APR")
+			if aErr == nil {
+				_ = DB_CreateApproval(dto.ApprovalModel{
+					ID:            primitive.NewObjectID(),
+					ApprovalId:    approvalId,
+					ReferenceType: dto.ApprovalRefPO,
+					ReferenceId:   po.PoId,
+					Status:        dto.ApprovalApproved,
+					ApprovedBy:    approvedBy,
+					ApprovedAt:    time.Now(),
+					Notes:         req.Notes,
+					CreatedAt:     time.Now(),
+				})
+			}
+		}
+	}
+	return nil
 }
 
 // ──────────────────────────────────────────────
 //  GRN — Goods Received Note
 // ──────────────────────────────────────────────
 
-// DB_CreateGRN saves the GRN and auto-creates a medicine batch for each line item.
+// DB_CreateGRN saves the GRN, auto-creates a medicine batch for each line item,
+// and writes a PURCHASE StockMovement to the audit ledger.
+// If the GRN references a PO (PoId is set), the PO must be in APPROVED status.
 func DB_CreateGRN(grn dto.GRNModel) error {
 	ctx := context.Background()
+
+	// ── Approval gate: if a PO is linked, it must be APPROVED ──
+	if grn.PoId != "" {
+		approved, err := DB_IsApproved(dto.ApprovalRefPO, grn.PoId)
+		if err != nil {
+			return fmt.Errorf("PO approval check failed: %v", err)
+		}
+		if !approved {
+			return fmt.Errorf("purchase order %s must be APPROVED before creating a GRN", grn.PoId)
+		}
+	}
 
 	// Insert the GRN document
 	if _, err := dbConfigs.GRNCollection.InsertOne(ctx, grn); err != nil {
 		return err
 	}
 
-	// Auto-create medicine batches for received items
+	// Auto-create medicine batches and write PURCHASE movements
 	for _, item := range grn.Items {
 		batchId, err := GenerateId(ctx, "medicine_batches", "BAT")
 		if err != nil {
@@ -186,6 +226,29 @@ func DB_CreateGRN(grn dto.GRNModel) error {
 		}
 		if _, err := dbConfigs.MedicineBatchCollection.InsertOne(ctx, batch); err != nil {
 			return err
+		}
+
+		// ── Write PURCHASE movement to audit ledger ──
+		movementId, err := GenerateId(ctx, "stock_movements", "MOV")
+		if err != nil {
+			return fmt.Errorf("failed to generate movement id: %v", err)
+		}
+		movement := dto.StockMovementModel{
+			ID:            primitive.NewObjectID(),
+			MovementId:    movementId,
+			BatchId:       batchId,
+			MedicineId:    item.MedicineID,
+			BranchId:      grn.BranchId,
+			Type:          dto.MovementPurchase,
+			Quantity:      item.Quantity,
+			ReferenceId:   grn.GrnId,
+			ReferenceType: "GRN",
+			Notes:         fmt.Sprintf("GRN receipt — batch %s, supplier %s", item.BatchNumber, grn.SupplierId),
+			CreatedBy:     grn.ReceivedBy,
+			CreatedAt:     time.Now(),
+		}
+		if err := DB_CreateStockMovement(movement); err != nil {
+			return fmt.Errorf("batch created but failed to write movement: %v", err)
 		}
 	}
 	return nil
