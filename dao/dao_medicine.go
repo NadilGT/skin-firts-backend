@@ -329,11 +329,12 @@ func DB_GetActiveStockByMedicineID(medicineID, branchId string) (int, error) {
 	return total, nil
 }
 
-// DB_DeductFromBatchAtomic atomically deducts from a BranchStock record by its ObjectID.
+// DB_DeductFromBatchAtomic atomically deducts from a BranchStock record by its batchId and branchId.
 // It decrements BOTH quantity and reservedQuantity (reservation finalization).
-func DB_DeductFromBatchAtomic(stockObjID primitive.ObjectID, deductAmount int) (int, error) {
+func DB_DeductFromBatchAtomic(batchId string, branchId string, deductAmount int) (int, error) {
 	filter := bson.M{
-		"_id":      stockObjID,
+		"batchId":  batchId,
+		"branchId": branchId,
 		"quantity": bson.M{"$gte": deductAmount},
 	}
 	update := bson.M{
@@ -470,18 +471,18 @@ func DB_DeductStockFEFO(medicineID string, requiredQty int, billId string, branc
 			if remainingToDeduct <= 0 {
 				break
 			}
-			var stockDoc dto.BranchStock
-			if err != nil || stockDoc.ID.IsZero() {
+			
+			available := v.Quantity - v.ReservedQuantity
+			if available <= 0 {
 				continue
 			}
-			deductAmount := stockDoc.Quantity - stockDoc.ReservedQuantity
-			if deductAmount <= 0 {
-				continue
-			}
+			
+			deductAmount := available
 			if deductAmount > remainingToDeduct {
 				deductAmount = remainingToDeduct
 			}
-			_, err = DB_DeductFromBatchAtomic(stockDoc.ID, deductAmount)
+			
+			_, err = DB_DeductFromBatchAtomic(v.BatchId, branchId, deductAmount)
 			if err != nil {
 				continue
 			}

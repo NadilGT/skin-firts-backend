@@ -489,16 +489,7 @@ func ConfirmBill(c *fiber.Ctx) error {
 
 	// Deduct the exact batches matched during CreateBill
 	for _, item := range bill.Items {
-		batchObjID, err := primitive.ObjectIDFromHex(item.BatchID)
-		if err != nil {
-			dao.DB_RevertStockDeduction(successfullyDeducted)
-			dao.DB_UpdateBillStatus(billId, "FAILED")
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"error": "Invalid batch ID format in bill",
-			})
-		}
-
-		_, err = dao.DB_DeductFromBatchAtomic(batchObjID, item.Quantity)
+		_, err = dao.DB_DeductFromBatchAtomic(item.BatchID, bill.BranchId, item.Quantity)
 		if err != nil {
 			// Someone bought this exact batch between creation and confirmation
 			dao.DB_RevertStockDeduction(successfullyDeducted)
