@@ -148,7 +148,7 @@ func CompleteStockTransfer(c *fiber.Ctx) error {
 func CancelStockTransfer(c *fiber.Ctx) error {
 	id := c.Query("id")
 	if err := dao.DB_CancelStockTransfer(id); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to cancel transfer"})
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Failed to cancel transfer: " + err.Error()})
 	}
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Stock transfer cancelled"})
 }

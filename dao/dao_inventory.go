@@ -418,6 +418,12 @@ func DB_CancelStockTransfer(transferId string) error {
 	if err != nil {
 		return err
 	}
+	if transfer.Status == "COMPLETED" {
+		return fmt.Errorf("transfer is already COMPLETED and cannot be cancelled")
+	}
+	if transfer.Status == "CANCELLED" {
+		return fmt.Errorf("transfer is already CANCELLED")
+	}
 
 	// Revert stock reservation if the transfer was PENDING or APPROVED
 	if transfer.Status == "PENDING" || transfer.Status == "APPROVED" {
