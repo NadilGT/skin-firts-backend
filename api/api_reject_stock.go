@@ -27,9 +27,8 @@ func CreateRejectStock(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Type is required (EXPIRED | DAMAGED | RETURN_TO_SUPPLIER)"})
 	}
 
-	// Auto-inject branchId from JWT if not provided
-	if branchId, ok := c.Locals("effectiveBranchId").(string); ok && branchId != "" {
-		r.BranchId = branchId
+	if err := EnforceBranchId(&r.BranchId, c); err != nil {
+		return err
 	}
 	createdBy, _ := c.Locals("uid").(string)
 
@@ -46,7 +45,11 @@ func CreateRejectStock(c *fiber.Ctx) error {
 	if err := dao.DB_CreateRejectStock(r); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create reject stock: " + err.Error()})
 	}
-	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"message": "Reject stock request created (PENDING)", "data": r})
+	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
+		"message": "Reject stock request created (PENDING)", 
+		"data": r,
+		"effectiveBranchId": r.BranchId,
+	})
 }
 
 // GetRejectStocks returns paginated reject stock records with optional filters.

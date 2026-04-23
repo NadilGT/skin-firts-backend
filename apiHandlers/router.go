@@ -172,6 +172,7 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 	app.Patch("/api/notifications/read-all", authMiddleware.ValidateToken, api.MarkAllNotificationsRead)
 
 	// ========== BRANCH MANAGEMENT ==========
+	app.Get("/api/branches/context", authMiddleware.ValidateToken, api.GetBranchContext)
 	app.Post("/admin/branches", authMiddleware.ValidateToken, api.CreateBranch)
 	app.Get("/branches", api.GetAllBranches)
 	app.Get("/branches/id", api.GetBranchByID)

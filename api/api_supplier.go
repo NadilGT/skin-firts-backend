@@ -103,9 +103,8 @@ func CreatePurchaseOrder(c *fiber.Ctx) error {
 	if po.SupplierId == "" || len(po.Items) == 0 {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "SupplierId and at least one item are required"})
 	}
-	// Auto-inject branchId from JWT
-	if branchId, ok := c.Locals("effectiveBranchId").(string); ok && branchId != "" {
-		po.BranchId = branchId
+	if err := EnforceBranchId(&po.BranchId, c); err != nil {
+		return err
 	}
 	// Calculate total
 	var total float64
@@ -128,7 +127,11 @@ func CreatePurchaseOrder(c *fiber.Ctx) error {
 	if err := dao.DB_CreatePurchaseOrder(po); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create purchase order: " + err.Error()})
 	}
-	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"message": "Purchase order created successfully", "data": po})
+	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
+		"message": "Purchase order created successfully", 
+		"data": po,
+		"effectiveBranchId": po.BranchId,
+	})
 }
 
 func GetPurchaseOrders(c *fiber.Ctx) error {
@@ -199,9 +202,8 @@ func CreateGRN(c *fiber.Ctx) error {
 	if grn.SupplierId == "" || len(grn.Items) == 0 {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "SupplierId and at least one item are required"})
 	}
-	// Auto-inject branchId from JWT
-	if branchId, ok := c.Locals("effectiveBranchId").(string); ok && branchId != "" {
-		grn.BranchId = branchId
+	if err := EnforceBranchId(&grn.BranchId, c); err != nil {
+		return err
 	}
 	id, err := dao.GenerateId(context.Background(), "grn", "GRN")
 	if err != nil {
@@ -220,6 +222,7 @@ func CreateGRN(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
 		"message": "GRN created and stock updated successfully",
 		"data":    grn,
+		"effectiveBranchId": grn.BranchId,
 	})
 }
 

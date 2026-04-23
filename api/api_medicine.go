@@ -348,15 +348,10 @@ func CreateBill(c *fiber.Ctx) error {
 	additionalCharges, _ := strconv.ParseFloat(additionalChargesStr, 64)
 	patientID := c.Query("patientId")
 
-	// Auto-inject branchId from JWT — prevents spoofing
-	branchId := ""
-	if val, ok := c.Locals("effectiveBranchId").(string); ok && val != "" {
-		branchId = val
-		req.BranchId = branchId
-	} else {
-		// Fallback to request payload if local not hit (e.g. testing)
-		branchId = req.BranchId
+	if err := EnforceBranchId(&req.BranchId, c); err != nil {
+		return err
 	}
+	branchId := req.BranchId
 
 	var allBillItems []dto.BillItem
 	var totalMedicinePrice float64
@@ -444,6 +439,7 @@ func CreateBill(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
 		"message": "Bill created successfully (Pending Confirmation)",
 		"data":    bill,
+		"effectiveBranchId": bill.BranchId,
 	})
 }
 

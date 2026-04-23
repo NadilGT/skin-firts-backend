@@ -76,3 +76,81 @@ func DeleteBranch(c *fiber.Ctx) error {
 	}
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Branch deleted successfully"})
 }
+
+// ──────────────────────────────────────────────
+//  Branch Context (Role-Aware)
+// ──────────────────────────────────────────────
+
+func GetBranchContext(c *fiber.Ctx) error {
+	role, _ := c.Locals("role").(string)
+	jwtBranchId, _ := c.Locals("branchId").(string)
+
+	isSuperAdmin := false
+	if roles, ok := c.Locals("roles").([]string); ok {
+		for _, r := range roles {
+			if r == "super_admin" || r == "SUPER_ADMIN" {
+				isSuperAdmin = true
+				break
+			}
+		}
+	}
+
+	if isSuperAdmin {
+		role = "SUPER_ADMIN"
+	} else if role == "" {
+		role = "STAFF"
+	}
+
+	type BranchContextResponse struct {
+		Role            string            `json:"role"`
+		Branches        []dto.BranchModel `json:"branches"`
+		DefaultBranchId string            `json:"defaultBranchId"`
+		CanSelectBranch bool              `json:"canSelectBranch"`
+		CurrentBranch   *dto.BranchModel  `json:"currentBranch"`
+	}
+
+	response := BranchContextResponse{
+		Role:            role,
+		Branches:        []dto.BranchModel{},
+		CanSelectBranch: isSuperAdmin,
+	}
+
+	if isSuperAdmin {
+		branches, err := dao.DB_SearchBranches("ACTIVE")
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch branches"})
+		}
+		if len(branches) == 0 {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "No ACTIVE branches found in the system"})
+		}
+		response.Branches = branches
+
+		var defaultBranch *dto.BranchModel
+		for i := range branches {
+			if branches[i].IsMainBranch {
+				defaultBranch = &branches[i]
+				break
+			}
+		}
+		if defaultBranch == nil {
+			defaultBranch = &branches[0]
+		}
+
+		response.DefaultBranchId = defaultBranch.BranchId
+		response.CurrentBranch = defaultBranch
+	} else {
+		branch, err := dao.DB_GetBranchByBranchId(jwtBranchId)
+		if err != nil || branch == nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "User's branch not found"})
+		}
+		if branch.Status != "ACTIVE" {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "User's branch is not ACTIVE"})
+		}
+		response.Branches = append(response.Branches, *branch)
+		response.DefaultBranchId = branch.BranchId
+		response.CurrentBranch = branch
+	}
+
+	return c.Status(fiber.StatusOK).JSON(response)
+}
+

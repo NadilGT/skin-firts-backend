@@ -24,9 +24,8 @@ func CreateSupplierBill(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "SupplierId and at least one item are required"})
 	}
 
-	// Auto-inject branchId from JWT
-	if branchId, ok := c.Locals("effectiveBranchId").(string); ok && branchId != "" {
-		bill.BranchId = branchId
+	if err := EnforceBranchId(&bill.BranchId, c); err != nil {
+		return err
 	}
 	bill.CreatedBy, _ = c.Locals("uid").(string)
 
@@ -63,7 +62,11 @@ func CreateSupplierBill(c *fiber.Ctx) error {
 	if err := dao.DB_CreateSupplierBill(bill); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create supplier bill: " + err.Error()})
 	}
-	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"message": "Supplier bill created successfully", "data": bill})
+	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
+		"message": "Supplier bill created successfully", 
+		"data": bill,
+		"effectiveBranchId": bill.BranchId,
+	})
 }
 
 // GetSupplierBills returns paginated supplier bills with optional filters.

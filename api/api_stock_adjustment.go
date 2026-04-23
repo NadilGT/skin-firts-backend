@@ -24,8 +24,8 @@ func CreateStockAdjustment(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Type must be ADJUSTMENT_IN or ADJUSTMENT_OUT"})
 	}
 
-	if branchId, ok := c.Locals("effectiveBranchId").(string); ok && branchId != "" {
-		r.BranchId = branchId
+	if err := EnforceBranchId(&r.BranchId, c); err != nil {
+		return err
 	}
 	r.CreatedBy, _ = c.Locals("uid").(string)
 
@@ -41,7 +41,11 @@ func CreateStockAdjustment(c *fiber.Ctx) error {
 	if err := dao.DB_CreateStockAdjustment(r); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create adjustment request: " + err.Error()})
 	}
-	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"message": "Adjustment created (PENDING)", "data": r})
+	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
+		"message": "Adjustment created (PENDING)", 
+		"data": r,
+		"effectiveBranchId": r.BranchId,
+	})
 }
 
 // GetStockAdjustments returns paginated adjustments
