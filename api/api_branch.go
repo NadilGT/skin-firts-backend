@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 func CreateBranch(c *fiber.Ctx) error {
@@ -48,12 +47,8 @@ func GetAllBranches(c *fiber.Ctx) error {
 }
 
 func GetBranchByID(c *fiber.Ctx) error {
-	id := c.Params("id")
-	objectID, err := primitive.ObjectIDFromHex(id)
-	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid branch ID"})
-	}
-	branch, err := dao.DB_GetBranchByID(objectID)
+	id := c.Query("id")
+	branch, err := dao.DB_GetBranchByBranchId(id)
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Branch not found"})
 	}
@@ -61,30 +56,22 @@ func GetBranchByID(c *fiber.Ctx) error {
 }
 
 func UpdateBranch(c *fiber.Ctx) error {
-	id := c.Params("id")
-	objectID, err := primitive.ObjectIDFromHex(id)
-	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid branch ID"})
-	}
+	id := c.Query("id")
 	var branch dto.BranchModel
 	if err := c.BodyParser(&branch); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
 	}
 	now := time.Now()
 	branch.UpdatedAt = &now
-	if err := dao.DB_UpdateBranch(objectID, branch); err != nil {
+	if err := dao.DB_UpdateBranch(id, branch); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update branch"})
 	}
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Branch updated successfully"})
 }
 
 func DeleteBranch(c *fiber.Ctx) error {
-	id := c.Params("id")
-	objectID, err := primitive.ObjectIDFromHex(id)
-	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid branch ID"})
-	}
-	if err := dao.DB_DeleteBranch(objectID); err != nil {
+	id := c.Query("id")
+	if err := dao.DB_DeleteBranch(id); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to delete branch"})
 	}
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Branch deleted successfully"})

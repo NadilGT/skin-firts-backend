@@ -174,9 +174,9 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 	// ========== BRANCH MANAGEMENT ==========
 	app.Post("/admin/branches", authMiddleware.ValidateToken, api.CreateBranch)
 	app.Get("/branches", api.GetAllBranches)
-	app.Get("/branches/:id", api.GetBranchByID)
-	app.Put("/branches/:id", authMiddleware.ValidateToken, api.UpdateBranch)
-	app.Delete("/branches/:id", authMiddleware.ValidateToken, api.DeleteBranch)
+	app.Get("/branches/id", api.GetBranchByID)
+	app.Put("/branches/id", authMiddleware.ValidateToken, api.UpdateBranch)
+	app.Delete("/branches/id", authMiddleware.ValidateToken, api.DeleteBranch)
 
 	// ========== SUPPLIER MANAGEMENT (branch-scoped) ==========
 	app.Post("/suppliers", authMiddleware.ValidateToken, BranchMiddleware, api.CreateSupplier)

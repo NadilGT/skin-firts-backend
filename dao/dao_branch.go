@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
@@ -30,17 +29,17 @@ func DB_GetAllBranches() ([]dto.BranchModel, error) {
 	return branches, nil
 }
 
-func DB_GetBranchByID(id primitive.ObjectID) (*dto.BranchModel, error) {
+func DB_GetBranchByBranchId(branchId string) (*dto.BranchModel, error) {
 	var branch dto.BranchModel
-	err := dbConfigs.BranchCollection.FindOne(context.Background(), bson.M{"_id": id}).Decode(&branch)
+	err := dbConfigs.BranchCollection.FindOne(context.Background(), bson.M{"branchId": branchId}).Decode(&branch)
 	if err != nil {
 		return nil, err
 	}
 	return &branch, nil
 }
 
-func DB_UpdateBranch(id primitive.ObjectID, branch dto.BranchModel) error {
-	filter := bson.M{"_id": id}
+func DB_UpdateBranch(branchId string, branch dto.BranchModel) error {
+	filter := bson.M{"branchId": branchId}
 	update := bson.M{
 		"$set": bson.M{
 			"name":         branch.Name,
@@ -56,19 +55,11 @@ func DB_UpdateBranch(id primitive.ObjectID, branch dto.BranchModel) error {
 	return err
 }
 
-func DB_DeleteBranch(id primitive.ObjectID) error {
-	_, err := dbConfigs.BranchCollection.DeleteOne(context.Background(), bson.M{"_id": id})
+func DB_DeleteBranch(branchId string) error {
+	_, err := dbConfigs.BranchCollection.DeleteOne(context.Background(), bson.M{"branchId": branchId})
 	return err
 }
 
-func DB_GetBranchByBranchId(branchId string) (*dto.BranchModel, error) {
-	var branch dto.BranchModel
-	err := dbConfigs.BranchCollection.FindOne(context.Background(), bson.M{"branchId": branchId}).Decode(&branch)
-	if err != nil {
-		return nil, err
-	}
-	return &branch, nil
-}
 
 func DB_SearchBranches(status string) ([]dto.BranchModel, error) {
 	ctx := context.Background()
