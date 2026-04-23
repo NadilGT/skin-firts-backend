@@ -21,9 +21,9 @@ func DB_CreateSupplier(supplier dto.SupplierModel) error {
 	return err
 }
 
-func DB_GetSupplierByID(id primitive.ObjectID) (*dto.SupplierModel, error) {
+func DB_GetSupplierByID(id string) (*dto.SupplierModel, error) {
 	var supplier dto.SupplierModel
-	err := dbConfigs.SupplierCollection.FindOne(context.Background(), bson.M{"_id": id}).Decode(&supplier)
+	err := dbConfigs.SupplierCollection.FindOne(context.Background(), bson.M{"supplierId": id}).Decode(&supplier)
 	if err != nil {
 		return nil, err
 	}
@@ -63,8 +63,8 @@ func DB_SearchSuppliers(query dto.SearchSupplierQuery) ([]dto.SupplierModel, int
 	return suppliers, total, nil
 }
 
-func DB_UpdateSupplier(id primitive.ObjectID, supplier dto.SupplierModel) error {
-	filter := bson.M{"_id": id}
+func DB_UpdateSupplier(id string, supplier dto.SupplierModel) error {
+	filter := bson.M{"supplierId": id}
 	update := bson.M{
 		"$set": bson.M{
 			"name":          supplier.Name,
@@ -82,8 +82,8 @@ func DB_UpdateSupplier(id primitive.ObjectID, supplier dto.SupplierModel) error 
 	return err
 }
 
-func DB_DeleteSupplier(id primitive.ObjectID) error {
-	_, err := dbConfigs.SupplierCollection.DeleteOne(context.Background(), bson.M{"_id": id})
+func DB_DeleteSupplier(id string) error {
+	_, err := dbConfigs.SupplierCollection.DeleteOne(context.Background(), bson.M{"supplierId": id})
 	return err
 }
 

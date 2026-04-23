@@ -64,12 +64,8 @@ func GetSuppliers(c *fiber.Ctx) error {
 }
 
 func GetSupplierByID(c *fiber.Ctx) error {
-	id := c.Params("id")
-	objectID, err := primitive.ObjectIDFromHex(id)
-	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid supplier ID"})
-	}
-	supplier, err := dao.DB_GetSupplierByID(objectID)
+	id := c.Query("id")
+	supplier, err := dao.DB_GetSupplierByID(id)
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Supplier not found"})
 	}
@@ -77,28 +73,20 @@ func GetSupplierByID(c *fiber.Ctx) error {
 }
 
 func UpdateSupplier(c *fiber.Ctx) error {
-	id := c.Params("id")
-	objectID, err := primitive.ObjectIDFromHex(id)
-	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid supplier ID"})
-	}
+	id := c.Query("id")
 	var supplier dto.SupplierModel
 	if err := c.BodyParser(&supplier); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
 	}
-	if err := dao.DB_UpdateSupplier(objectID, supplier); err != nil {
+	if err := dao.DB_UpdateSupplier(id, supplier); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update supplier"})
 	}
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Supplier updated successfully"})
 }
 
 func DeleteSupplier(c *fiber.Ctx) error {
-	id := c.Params("id")
-	objectID, err := primitive.ObjectIDFromHex(id)
-	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid supplier ID"})
-	}
-	if err := dao.DB_DeleteSupplier(objectID); err != nil {
+	id := c.Query("id")
+	if err := dao.DB_DeleteSupplier(id); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to delete supplier"})
 	}
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Supplier deleted successfully"})
