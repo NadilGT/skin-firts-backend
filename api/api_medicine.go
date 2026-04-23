@@ -348,10 +348,11 @@ func CreateBill(c *fiber.Ctx) error {
 	additionalCharges, _ := strconv.ParseFloat(additionalChargesStr, 64)
 	patientID := c.Query("patientId")
 
-	if err := EnforceBranchId(&req.BranchId, c); err != nil {
+	branchId, err := ResolveBranchId(c, req.BranchId)
+	if err != nil {
 		return err
 	}
-	branchId := req.BranchId
+	req.BranchId = branchId
 
 	var allBillItems []dto.BillItem
 	var totalMedicinePrice float64

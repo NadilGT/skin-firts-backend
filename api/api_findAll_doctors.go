@@ -23,7 +23,12 @@ func GetDoctorsByFocus(c *fiber.Ctx) error {
 		})
 	}
 
-	doctors, err := dao.DB_FindDoctorsByFocus(focus)
+	branchId, err := ResolveBranchId(c, c.Query("branchId"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	doctors, err := dao.DB_FindDoctorsByFocus(focus, branchId)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Failed to fetch doctors by focus",

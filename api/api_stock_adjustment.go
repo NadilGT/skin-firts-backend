@@ -24,9 +24,11 @@ func CreateStockAdjustment(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Type must be ADJUSTMENT_IN or ADJUSTMENT_OUT"})
 	}
 
-	if err := EnforceBranchId(&r.BranchId, c); err != nil {
+	branchId, err := ResolveBranchId(c, r.BranchId)
+	if err != nil {
 		return err
 	}
+	r.BranchId = branchId
 	r.CreatedBy, _ = c.Locals("uid").(string)
 
 	adjId, err := dao.GenerateId(context.Background(), "stock_adjustments", "ADJ")

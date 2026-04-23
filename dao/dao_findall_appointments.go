@@ -95,9 +95,12 @@ func DB_FindAppointmentsByDoctorID(doctorID string, branchId string, page, limit
 	return appointments, total, nil
 }
 // DB_FindAppointmentsByPatientID returns a paginated list of appointments for a specific patient (Firebase ID).
-func DB_FindAppointmentsByPatientID(patientID string, page, limit int) ([]dto.AppointmentModel, int64, error) {
+func DB_FindAppointmentsByPatientID(patientID string, branchId string, page, limit int) ([]dto.AppointmentModel, int64, error) {
 	ctx := context.Background()
 	filter := bson.M{"patientId": patientID}
+	if branchId != "" {
+		filter["branchId"] = branchId
+	}
 
 	total, err := dbConfigs.AppointmentCollection.CountDocuments(ctx, filter)
 	if err != nil {

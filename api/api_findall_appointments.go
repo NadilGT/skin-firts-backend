@@ -146,9 +146,14 @@ func GetAppointmentsByPatientID(c *fiber.Ctx) error {
 		})
 	}
 
+	branchId, err := ResolveBranchId(c, c.Query("branchId"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+
 	page, limit := parsePagination(c)
 
-	appointments, total, err := dao.DB_FindAppointmentsByPatientID(patientID, page, limit)
+	appointments, total, err := dao.DB_FindAppointmentsByPatientID(patientID, branchId, page, limit)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Failed to fetch appointments for this patient",

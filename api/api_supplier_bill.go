@@ -24,9 +24,11 @@ func CreateSupplierBill(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "SupplierId and at least one item are required"})
 	}
 
-	if err := EnforceBranchId(&bill.BranchId, c); err != nil {
+	branchId, err := ResolveBranchId(c, bill.BranchId)
+	if err != nil {
 		return err
 	}
+	bill.BranchId = branchId
 	bill.CreatedBy, _ = c.Locals("uid").(string)
 
 	// Compute totals from items

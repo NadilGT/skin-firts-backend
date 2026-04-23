@@ -33,12 +33,9 @@ func CreateDoctorSchedule(c *fiber.Ctx) error {
 	}
 
 	// Resolve branchId
-	branchId := GetBranchId(c)
-	if branchId == "" && req.BranchId != "" {
-		branchId = req.BranchId
-	}
-	if branchId == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "branchId is required"})
+	branchId, err := ResolveBranchId(c, req.BranchId)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 
 	schedule := dto.DoctorScheduleModel{
@@ -72,9 +69,9 @@ func GetDoctorSchedule(c *fiber.Ctx) error {
 		})
 	}
 
-	branchId := GetBranchId(c)
-	if branchId == "" {
-		branchId = c.Query("branchId")
+	branchId, err := ResolveBranchId(c, c.Query("branchId"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 
 	schedules, err := dao.DB_GetDoctorSchedule(doctorName, branchId)
@@ -128,9 +125,9 @@ func GetDoctorScheduleByDateRange(c *fiber.Ctx) error {
 		})
 	}
 
-	branchId := GetBranchId(c)
-	if branchId == "" {
-		branchId = c.Query("branchId")
+	branchId, err := ResolveBranchId(c, c.Query("branchId"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 
 	schedules, err := dao.DB_GetDoctorScheduleByDateRange(doctorName, branchId, startDate, endDate)
@@ -174,9 +171,9 @@ func DeleteDoctorSchedule(c *fiber.Ctx) error {
 		})
 	}
 
-	branchId := GetBranchId(c)
-	if branchId == "" {
-		branchId = c.Query("branchId")
+	branchId, err := ResolveBranchId(c, c.Query("branchId"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 
 	if err := dao.DB_DeleteDoctorSchedule(doctorName, branchId, date); err != nil {
@@ -209,9 +206,9 @@ func DeleteTimeSlotFromSchedule(c *fiber.Ctx) error {
 		})
 	}
 
-	branchId := GetBranchId(c)
-	if branchId == "" {
-		branchId = c.Query("branchId")
+	branchId, err := ResolveBranchId(c, c.Query("branchId"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 
 	if err := dao.DB_DeleteTimeSlotFromSchedule(doctorName, branchId, date, timeSlot); err != nil {

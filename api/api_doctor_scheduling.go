@@ -43,9 +43,9 @@ func CreateDoctorWeeklySchedule(c *fiber.Ctx) error {
 
 func UpdateDoctorWeeklySchedule(c *fiber.Ctx) error {
 	id := c.Query("doctorId")
-	branchId := GetBranchId(c)
-	if branchId == "" {
-		branchId = c.Query("branchId")
+	branchId, err := ResolveBranchId(c, c.Query("branchId"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 
 	var schedule dto.DoctorWeeklySchedule
@@ -63,9 +63,9 @@ func UpdateDoctorWeeklySchedule(c *fiber.Ctx) error {
 
 func DeleteDoctorWeeklySchedule(c *fiber.Ctx) error {
 	id := c.Query("doctorId")
-	branchId := GetBranchId(c)
-	if branchId == "" {
-		branchId = c.Query("branchId")
+	branchId, err := ResolveBranchId(c, c.Query("branchId"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 
 	if err := dao.DB_DeleteDoctorWeeklySchedule(id, branchId); err != nil {
@@ -79,9 +79,9 @@ func DeleteDoctorWeeklySchedule(c *fiber.Ctx) error {
 
 func GetAllDoctorWeeklySchedules(c *fiber.Ctx) error {
 	doctorID := c.Query("doctorId")
-	branchId := GetBranchId(c)
-	if branchId == "" {
-		branchId = c.Query("branchId")
+	branchId, err := ResolveBranchId(c, c.Query("branchId"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 
 	schedules, err := dao.DB_FindAllDoctorWeeklySchedules(doctorID, branchId)
@@ -152,9 +152,9 @@ func DeleteDoctorAvailability(c *fiber.Ctx) error {
 
 func GetAllDoctorAvailabilities(c *fiber.Ctx) error {
 	doctorID := c.Query("doctorId")
-	branchId := GetBranchId(c)
-	if branchId == "" {
-		branchId = c.Query("branchId")
+	branchId, err := ResolveBranchId(c, c.Query("branchId"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 
 	availabilities, err := dao.DB_FindAllDoctorAvailabilities(doctorID, branchId)
@@ -171,9 +171,9 @@ func GetDoctorAvailableDatesForWeek(c *fiber.Ctx) error {
 	}
 
 	// 1. Fetch DoctorWeeklySchedule from MongoDB using doctorId, branchId and isActive = true
-	branchId := GetBranchId(c)
-	if branchId == "" {
-		branchId = c.Query("branchId")
+	branchId, err := ResolveBranchId(c, c.Query("branchId"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 
 	schedules, err := dao.DB_FindAllDoctorWeeklySchedules(doctorID, branchId)
@@ -253,9 +253,9 @@ func GetDoctorAvailableDatesForWeek(c *fiber.Ctx) error {
 func CheckDoctorAvailability(c *fiber.Ctx) error {
 	doctorID := c.Query("doctorId")
 	dateStr := c.Query("date")
-	branchId := GetBranchId(c)
-	if branchId == "" {
-		branchId = c.Query("branchId")
+	branchId, err := ResolveBranchId(c, c.Query("branchId"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 
 	if doctorID == "" || dateStr == "" || branchId == "" {

@@ -48,6 +48,14 @@ func (h *StaffHandler) CreateStaffAccount(c *fiber.Ctx) error {
 		})
 	}
 
+	branchId, err := ResolveBranchId(c, req.BranchId)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+	req.BranchId = branchId
+
 	ctx := context.Background()
 	client, err := h.firebaseApp.Auth(ctx)
 	if err != nil {

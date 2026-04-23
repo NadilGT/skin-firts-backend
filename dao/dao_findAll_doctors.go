@@ -25,10 +25,13 @@ func DB_FindAllDoctors() (*[]dto.DoctorInfoModel, error) {
 	return &doctors, nil
 }
 
-func DB_FindDoctorsByFocus(focus string) (*[]dto.DoctorInfoModel, error) {
+func DB_FindDoctorsByFocus(focus string, branchId string) (*[]dto.DoctorInfoModel, error) {
 	var doctors []dto.DoctorInfoModel
 
 	filter := bson.M{"focus": focus}
+	if branchId != "" {
+		filter["branchIds"] = branchId
+	}
 	results, err := dbConfigs.DoctorInfoCollection.Find(context.Background(), filter)
 	if err != nil {
 		return nil, err

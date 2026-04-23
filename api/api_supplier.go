@@ -103,9 +103,11 @@ func CreatePurchaseOrder(c *fiber.Ctx) error {
 	if po.SupplierId == "" || len(po.Items) == 0 {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "SupplierId and at least one item are required"})
 	}
-	if err := EnforceBranchId(&po.BranchId, c); err != nil {
+	branchId, err := ResolveBranchId(c, po.BranchId)
+	if err != nil {
 		return err
 	}
+	po.BranchId = branchId
 	// Calculate total
 	var total float64
 	for i := range po.Items {
@@ -202,9 +204,11 @@ func CreateGRN(c *fiber.Ctx) error {
 	if grn.SupplierId == "" || len(grn.Items) == 0 {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "SupplierId and at least one item are required"})
 	}
-	if err := EnforceBranchId(&grn.BranchId, c); err != nil {
+	branchId, err := ResolveBranchId(c, grn.BranchId)
+	if err != nil {
 		return err
 	}
+	grn.BranchId = branchId
 	id, err := dao.GenerateId(context.Background(), "grn", "GRN")
 	if err != nil {
 		return utils.SendErrorResponse(c, fiber.StatusInternalServerError, err.Error())

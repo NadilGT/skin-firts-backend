@@ -56,39 +56,15 @@ func AssignDoctorToBranch(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Doctor ID parameter is required"})
 	}
 
-	targetBranchId := ""
+	var req DoctorBranchAssignRequest
+	_ = c.BodyParser(&req)
 
-	// Check if the user is a super admin
-	roles, _ := c.Locals("roles").([]string)
-	isSuper := false
-	for _, r := range roles {
-		if r == "super_admin" {
-			isSuper = true
-			break
-		}
+	targetBranchId, err := ResolveBranchId(c, req.BranchId)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 
-	effectiveBranchId, _ := c.Locals("effectiveBranchId").(string)
-
-	if isSuper {
-		// Super Admin can provide arbitrary branchId via body
-		var req DoctorBranchAssignRequest
-		if err := c.BodyParser(&req); err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
-		}
-		if req.BranchId == "" {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "BranchId is required in body for super_admin"})
-		}
-		targetBranchId = req.BranchId
-	} else {
-		// Normal branch admin can only assign the doctor to their own branch
-		if effectiveBranchId == "" {
-			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "You do not have a branch assigned"})
-		}
-		targetBranchId = effectiveBranchId
-	}
-
-	err := dao.DB_AddDoctorToBranch(doctorID, targetBranchId)
+	err = dao.DB_AddDoctorToBranch(doctorID, targetBranchId)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to assign doctor to branch: " + err.Error()})
 	}
@@ -106,36 +82,15 @@ func RemoveDoctorFromBranch(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Doctor ID parameter is required"})
 	}
 
-	targetBranchId := ""
+	var req DoctorBranchAssignRequest
+	_ = c.BodyParser(&req)
 
-	roles, _ := c.Locals("roles").([]string)
-	isSuper := false
-	for _, r := range roles {
-		if r == "super_admin" {
-			isSuper = true
-			break
-		}
+	targetBranchId, err := ResolveBranchId(c, req.BranchId)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 
-	effectiveBranchId, _ := c.Locals("effectiveBranchId").(string)
-
-	if isSuper {
-		var req DoctorBranchAssignRequest
-		if err := c.BodyParser(&req); err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
-		}
-		if req.BranchId == "" {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "BranchId is required in body for super_admin"})
-		}
-		targetBranchId = req.BranchId
-	} else {
-		if effectiveBranchId == "" {
-			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "You do not have a branch assigned"})
-		}
-		targetBranchId = effectiveBranchId
-	}
-
-	err := dao.DB_RemoveDoctorFromBranch(doctorID, targetBranchId)
+	err = dao.DB_RemoveDoctorFromBranch(doctorID, targetBranchId)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to remove doctor from branch: " + err.Error()})
 	}

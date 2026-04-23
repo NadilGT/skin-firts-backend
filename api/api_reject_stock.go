@@ -27,9 +27,11 @@ func CreateRejectStock(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Type is required (EXPIRED | DAMAGED | RETURN_TO_SUPPLIER)"})
 	}
 
-	if err := EnforceBranchId(&r.BranchId, c); err != nil {
+	branchId, err := ResolveBranchId(c, r.BranchId)
+	if err != nil {
 		return err
 	}
+	r.BranchId = branchId
 	createdBy, _ := c.Locals("uid").(string)
 
 	rejectId, err := dao.GenerateId(context.Background(), "reject_stock", "REJ")
