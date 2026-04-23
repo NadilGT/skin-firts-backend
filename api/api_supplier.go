@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 // ──────────────────────────────────────────────
@@ -249,12 +248,8 @@ func GetGRNs(c *fiber.Ctx) error {
 }
 
 func GetGRNByID(c *fiber.Ctx) error {
-	id := c.Params("id")
-	objectID, err := primitive.ObjectIDFromHex(id)
-	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid GRN ID"})
-	}
-	grn, err := dao.DB_GetGRNByID(objectID)
+	id := c.Query("id")
+	grn, err := dao.DB_GetGRNByID(id)
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "GRN not found"})
 	}

@@ -181,9 +181,9 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 	// ========== SUPPLIER MANAGEMENT (branch-scoped) ==========
 	app.Post("/suppliers", authMiddleware.ValidateToken, BranchMiddleware, api.CreateSupplier)
 	app.Get("/suppliers", authMiddleware.ValidateToken, BranchMiddleware, api.GetSuppliers)
-	app.Get("/suppliers/:id", authMiddleware.ValidateToken, BranchMiddleware, api.GetSupplierByID)
-	app.Put("/suppliers/:id", authMiddleware.ValidateToken, BranchMiddleware, api.UpdateSupplier)
-	app.Delete("/suppliers/:id", authMiddleware.ValidateToken, BranchMiddleware, api.DeleteSupplier)
+	app.Get("/suppliers/id", authMiddleware.ValidateToken, BranchMiddleware, api.GetSupplierByID)
+	app.Put("/suppliers/id", authMiddleware.ValidateToken, BranchMiddleware, api.UpdateSupplier)
+	app.Delete("/suppliers/id", authMiddleware.ValidateToken, BranchMiddleware, api.DeleteSupplier)
 
 	// ========== PURCHASE ORDERS (branch-scoped) ==========
 	app.Post("/purchase-orders", authMiddleware.ValidateToken, BranchMiddleware, api.CreatePurchaseOrder)
@@ -194,7 +194,7 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 	// ========== GRN (branch-scoped) ==========
 	app.Post("/grn", authMiddleware.ValidateToken, BranchMiddleware, api.CreateGRN)
 	app.Get("/grn", authMiddleware.ValidateToken, BranchMiddleware, api.GetGRNs)
-	app.Get("/grn/:id", authMiddleware.ValidateToken, BranchMiddleware, api.GetGRNByID)
+	app.Get("/grn/id", authMiddleware.ValidateToken, BranchMiddleware, api.GetGRNByID)
 
 	// ========== INVENTORY (branch-scoped) ==========
 	app.Get("/inventory/stock-valuation", authMiddleware.ValidateToken, BranchMiddleware, api.GetStockValuation)

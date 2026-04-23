@@ -285,9 +285,9 @@ func dao_CreateMedicineBatch(ctx context.Context, batch dto.MedicineBatch) error
 }
 
 
-func DB_GetGRNByID(id primitive.ObjectID) (*dto.GRNModel, error) {
+func DB_GetGRNByID(id string) (*dto.GRNModel, error) {
 	var grn dto.GRNModel
-	err := dbConfigs.GRNCollection.FindOne(context.Background(), bson.M{"_id": id}).Decode(&grn)
+	err := dbConfigs.GRNCollection.FindOne(context.Background(), bson.M{"grnId": id}).Decode(&grn)
 	if err != nil {
 		return nil, err
 	}
