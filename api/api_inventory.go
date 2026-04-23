@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"lawyerSL-Backend/dao"
 	"lawyerSL-Backend/dto"
 	"lawyerSL-Backend/utils"
@@ -71,8 +72,22 @@ func CreateStockTransfer(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "At least one item is required"})
 	}
 
+	// ── Reserve Stock First ──
+	var successfullyReserved []dto.TransferItem
+	for _, item := range transfer.Items {
+		if err := dao.DB_ReserveSpecificStock(item.StockId, transfer.FromBranchId, item.Quantity); err != nil {
+			// Revert all previously reserved items in this request
+			dao.DB_RevertTransferStockReservation(successfullyReserved, transfer.FromBranchId)
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": fmt.Sprintf("Failed to reserve stock for %s: %v", item.MedicineName, err),
+			})
+		}
+		successfullyReserved = append(successfullyReserved, item)
+	}
+
 	id, err := dao.GenerateId(context.Background(), "stock_transfers", "TRF")
 	if err != nil {
+		dao.DB_RevertTransferStockReservation(successfullyReserved, transfer.FromBranchId)
 		return utils.SendErrorResponse(c, fiber.StatusInternalServerError, err.Error())
 	}
 	transfer.TransferId = id
@@ -81,6 +96,7 @@ func CreateStockTransfer(c *fiber.Ctx) error {
 	transfer.UpdatedAt = time.Now()
 
 	if err := dao.DB_CreateStockTransfer(transfer); err != nil {
+		dao.DB_RevertTransferStockReservation(successfullyReserved, transfer.FromBranchId)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create stock transfer: " + err.Error()})
 	}
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"message": "Stock transfer created (PENDING)", "data": transfer})

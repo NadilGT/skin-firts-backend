@@ -187,6 +187,48 @@ func DB_GetExpiryAlerts(branchId string, days int) ([]dto.ExpiryAlertItem, error
 //  Stock Transfer
 // ──────────────────────────────────────────────
 
+// DB_ReserveSpecificStock reserves a specific quantity of stock from a given BranchStock record.
+func DB_ReserveSpecificStock(stockId string, branchId string, requiredQty int) error {
+	filter := bson.M{
+		"stockId": stockId,
+		"branchId": branchId,
+		"$expr": bson.M{
+			"$gte": bson.A{
+				bson.M{"$subtract": bson.A{"$quantity", "$reservedQuantity"}},
+				requiredQty,
+			},
+		},
+	}
+	update := bson.M{
+		"$inc": bson.M{"reservedQuantity": requiredQty},
+		"$set": bson.M{"updatedAt": time.Now()},
+	}
+
+	res, err := dbConfigs.BranchStockCollection.UpdateOne(context.Background(), filter, update)
+	if err != nil {
+		return err
+	}
+	if res.ModifiedCount == 0 {
+		return fmt.Errorf("insufficient available stock or stock record not found for stockId: %s", stockId)
+	}
+	return nil
+}
+
+// DB_RevertTransferStockReservation removes the reservation for a list of transfer items.
+func DB_RevertTransferStockReservation(items []dto.TransferItem, branchId string) error {
+	for _, item := range items {
+		if item.StockId != "" {
+			filter := bson.M{"stockId": item.StockId, "branchId": branchId, "reservedQuantity": bson.M{"$gte": item.Quantity}}
+			update := bson.M{
+				"$inc": bson.M{"reservedQuantity": -item.Quantity},
+				"$set": bson.M{"updatedAt": time.Now()},
+			}
+			_ = dbConfigs.BranchStockCollection.FindOneAndUpdate(context.Background(), filter, update)
+		}
+	}
+	return nil
+}
+
 func DB_CreateStockTransfer(transfer dto.StockTransferModel) error {
 	_, err := dbConfigs.StockTransferCollection.InsertOne(context.Background(), transfer)
 	return err
@@ -293,6 +335,7 @@ func DB_CompleteStockTransfer(transferID primitive.ObjectID) error {
 
 	for _, item := range transfer.Items {
 		// 1. Atomically deduct from source BranchStock
+		// Note: We decrement BOTH quantity and reservedQuantity because it was reserved on creation
 		var srcStock dto.BranchStock
 		err := dbConfigs.BranchStockCollection.FindOne(ctx, bson.M{"stockId": item.StockId, "branchId": transfer.FromBranchId}).Decode(&srcStock)
 		if err != nil {
@@ -301,7 +344,7 @@ func DB_CompleteStockTransfer(transferID primitive.ObjectID) error {
 
 		filter := bson.M{"_id": srcStock.ID, "quantity": bson.M{"$gte": item.Quantity}}
 		update := bson.M{
-			"$inc": bson.M{"quantity": -item.Quantity},
+			"$inc": bson.M{"quantity": -item.Quantity, "reservedQuantity": -item.Quantity},
 			"$set": bson.M{"updatedAt": time.Now()},
 		}
 		opts := options.FindOneAndUpdate().SetReturnDocument(options.After)
@@ -369,8 +412,20 @@ func DB_CompleteStockTransfer(transferID primitive.ObjectID) error {
 }
 
 func DB_CancelStockTransfer(id primitive.ObjectID) error {
-	_, err := dbConfigs.StockTransferCollection.UpdateOne(
-		context.Background(),
+	ctx := context.Background()
+
+	transfer, err := DB_GetStockTransferByID(id)
+	if err != nil {
+		return err
+	}
+
+	// Revert stock reservation if the transfer was PENDING or APPROVED
+	if transfer.Status == "PENDING" || transfer.Status == "APPROVED" {
+		_ = DB_RevertTransferStockReservation(transfer.Items, transfer.FromBranchId)
+	}
+
+	_, err = dbConfigs.StockTransferCollection.UpdateOne(
+		ctx,
 		bson.M{"_id": id},
 		bson.M{"$set": bson.M{"status": "CANCELLED", "updatedAt": time.Now()}},
 	)
