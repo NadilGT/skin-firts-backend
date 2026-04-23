@@ -204,9 +204,10 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 	// ========== STOCK TRANSFERS (branch-scoped) ==========
 	app.Post("/stock-transfers", authMiddleware.ValidateToken, BranchMiddleware, api.CreateStockTransfer)
 	app.Get("/stock-transfers", authMiddleware.ValidateToken, BranchMiddleware, api.GetStockTransfers)
-	app.Patch("/stock-transfers/:id/approve", authMiddleware.ValidateToken, BranchMiddleware, RequiresRole("admin"), api.ApproveStockTransfer)
-	app.Patch("/stock-transfers/:id/complete", authMiddleware.ValidateToken, BranchMiddleware, api.CompleteStockTransfer)
-	app.Patch("/stock-transfers/:id/cancel", authMiddleware.ValidateToken, BranchMiddleware, api.CancelStockTransfer)
+	app.Get("/stock-transfers/id", authMiddleware.ValidateToken, BranchMiddleware, api.GetStockTransferByTransferID)
+	app.Patch("/stock-transfers/id/approve", authMiddleware.ValidateToken, BranchMiddleware, RequiresRole("admin"), api.ApproveStockTransfer)
+	app.Patch("/stock-transfers/id/complete", authMiddleware.ValidateToken, BranchMiddleware, api.CompleteStockTransfer)
+	app.Patch("/stock-transfers/id/cancel", authMiddleware.ValidateToken, BranchMiddleware, api.CancelStockTransfer)
 
 	// ========== PAYMENT MANAGEMENT (branch-scoped) ==========
 	app.Get("/billing/pharmacy", authMiddleware.ValidateToken, BranchMiddleware, api.GetPharmacyBills)

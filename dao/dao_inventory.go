@@ -234,9 +234,9 @@ func DB_CreateStockTransfer(transfer dto.StockTransferModel) error {
 	return err
 }
 
-func DB_GetStockTransferByID(id primitive.ObjectID) (*dto.StockTransferModel, error) {
+func DB_GetStockTransferByTransferID(transferId string) (*dto.StockTransferModel, error) {
 	var t dto.StockTransferModel
-	err := dbConfigs.StockTransferCollection.FindOne(context.Background(), bson.M{"_id": id}).Decode(&t)
+	err := dbConfigs.StockTransferCollection.FindOne(context.Background(), bson.M{"transferId": transferId}).Decode(&t)
 	if err != nil {
 		return nil, err
 	}
@@ -277,10 +277,10 @@ func DB_SearchStockTransfers(query dto.SearchTransferQuery) ([]dto.StockTransfer
 
 // DB_ApproveStockTransfer transitions a transfer from PENDING → APPROVED
 // and creates an Approval record so execution can gate on it.
-func DB_ApproveStockTransfer(transferID primitive.ObjectID, approvedBy string) error {
+func DB_ApproveStockTransfer(transferId string, approvedBy string) error {
 	ctx := context.Background()
 
-	transfer, err := DB_GetStockTransferByID(transferID)
+	transfer, err := DB_GetStockTransferByTransferID(transferId)
 	if err != nil {
 		return err
 	}
@@ -290,7 +290,7 @@ func DB_ApproveStockTransfer(transferID primitive.ObjectID, approvedBy string) e
 
 	// Update status to APPROVED
 	_, err = dbConfigs.StockTransferCollection.UpdateOne(ctx,
-		bson.M{"_id": transferID},
+		bson.M{"transferId": transferId},
 		bson.M{"$set": bson.M{"status": "APPROVED", "updatedAt": time.Now()}})
 	if err != nil {
 		return err
@@ -317,10 +317,10 @@ func DB_ApproveStockTransfer(transferID primitive.ObjectID, approvedBy string) e
 //  1. Deducts qty from each source batch (TRANSFER_OUT movement)
 //  2. Creates a new batch in the target branch (TRANSFER_IN movement)
 //  3. Marks the transfer as COMPLETED
-func DB_CompleteStockTransfer(transferID primitive.ObjectID) error {
+func DB_CompleteStockTransfer(transferId string) error {
 	ctx := context.Background()
 
-	transfer, err := DB_GetStockTransferByID(transferID)
+	transfer, err := DB_GetStockTransferByTransferID(transferId)
 	if err != nil {
 		return err
 	}
@@ -328,7 +328,7 @@ func DB_CompleteStockTransfer(transferID primitive.ObjectID) error {
 	// ── Approval gate: transfer must be APPROVED before execution ──
 	if transfer.Status != "APPROVED" {
 		if transfer.Status == "PENDING" {
-			return fmt.Errorf("transfer must be APPROVED before completion; call /stock-transfers/%s/approve first", transferID.Hex())
+			return fmt.Errorf("transfer must be APPROVED before completion; call /stock-transfers/%s/approve first", transferId)
 		}
 		return fmt.Errorf("transfer is already %s", transfer.Status)
 	}
@@ -406,15 +406,15 @@ func DB_CompleteStockTransfer(transferID primitive.ObjectID) error {
 
 	// Mark transfer as COMPLETED
 	_, err = dbConfigs.StockTransferCollection.UpdateOne(ctx,
-		bson.M{"_id": transferID},
+		bson.M{"transferId": transferId},
 		bson.M{"$set": bson.M{"status": "COMPLETED", "updatedAt": time.Now()}})
 	return err
 }
 
-func DB_CancelStockTransfer(id primitive.ObjectID) error {
+func DB_CancelStockTransfer(transferId string) error {
 	ctx := context.Background()
 
-	transfer, err := DB_GetStockTransferByID(id)
+	transfer, err := DB_GetStockTransferByTransferID(transferId)
 	if err != nil {
 		return err
 	}
@@ -426,7 +426,7 @@ func DB_CancelStockTransfer(id primitive.ObjectID) error {
 
 	_, err = dbConfigs.StockTransferCollection.UpdateOne(
 		ctx,
-		bson.M{"_id": id},
+		bson.M{"transferId": transferId},
 		bson.M{"$set": bson.M{"status": "CANCELLED", "updatedAt": time.Now()}},
 	)
 	return err

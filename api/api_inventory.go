@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 // ──────────────────────────────────────────────
@@ -126,25 +125,29 @@ func GetStockTransfers(c *fiber.Ctx) error {
 	})
 }
 
-func CompleteStockTransfer(c *fiber.Ctx) error {
-	id := c.Params("id")
-	objectID, err := primitive.ObjectIDFromHex(id)
-	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid transfer ID"})
+func GetStockTransferByTransferID(c *fiber.Ctx) error {
+	id := c.Query("id")
+	if id == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Missing transfer ID"})
 	}
-	if err := dao.DB_CompleteStockTransfer(objectID); err != nil {
+	transfer, err := dao.DB_GetStockTransferByTransferID(id)
+	if err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Stock transfer not found"})
+	}
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{"data": transfer})
+}
+
+func CompleteStockTransfer(c *fiber.Ctx) error {
+	id := c.Query("id")
+	if err := dao.DB_CompleteStockTransfer(id); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Failed to complete transfer: " + err.Error()})
 	}
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Stock transfer completed successfully"})
 }
 
 func CancelStockTransfer(c *fiber.Ctx) error {
-	id := c.Params("id")
-	objectID, err := primitive.ObjectIDFromHex(id)
-	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid transfer ID"})
-	}
-	if err := dao.DB_CancelStockTransfer(objectID); err != nil {
+	id := c.Query("id")
+	if err := dao.DB_CancelStockTransfer(id); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to cancel transfer"})
 	}
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Stock transfer cancelled"})
@@ -155,13 +158,9 @@ func CancelStockTransfer(c *fiber.Ctx) error {
 //
 // PATCH /stock-transfers/:id/approve
 func ApproveStockTransfer(c *fiber.Ctx) error {
-	id := c.Params("id")
-	objectID, err := primitive.ObjectIDFromHex(id)
-	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid transfer ID"})
-	}
+	id := c.Query("id")
 	approvedBy, _ := c.Locals("uid").(string)
-	if err := dao.DB_ApproveStockTransfer(objectID, approvedBy); err != nil {
+	if err := dao.DB_ApproveStockTransfer(id, approvedBy); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Failed to approve transfer: " + err.Error()})
 	}
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Stock transfer approved — can now be completed"})
