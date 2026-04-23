@@ -36,21 +36,8 @@ func DB_GetTopSellingMedicines(query dto.AnalyticsQuery) ([]dto.TopSellingItem, 
 			"totalQtySold": bson.M{"$sum": "$items.quantity"},
 			"totalRevenue": bson.M{"$sum": bson.M{"$multiply": []interface{}{"$items.quantity", "$items.price"}}},
 		}}},
-		bson.D{{Key: "$lookup", Value: bson.M{
-			"from":         "medicines",
-			"localField":   "_id",
-			"foreignField": "medicineid",
-			"as":           "medicine",
-		}}},
-		bson.D{{Key: "$unwind", Value: bson.M{"path": "$medicine", "preserveNullAndEmptyArrays": true}}},
 		bson.D{{Key: "$sort", Value: bson.D{{Key: "totalQtySold", Value: -1}}}},
 		bson.D{{Key: "$limit", Value: int64(limit)}},
-		bson.D{{Key: "$project", Value: bson.M{
-			"medicineId":   "$_id",
-			"medicineName": "$medicine.name",
-			"totalQtySold": 1,
-			"totalRevenue": 1,
-		}}},
 	}
 
 	cursor, err := dbConfigs.BillCollection.Aggregate(ctx, pipeline)
@@ -59,9 +46,36 @@ func DB_GetTopSellingMedicines(query dto.AnalyticsQuery) ([]dto.TopSellingItem, 
 	}
 	defer cursor.Close(ctx)
 
-	var items []dto.TopSellingItem
-	if err = cursor.All(ctx, &items); err != nil {
+	type rawItem struct {
+		MedicineId   string  `bson:"_id"`
+		TotalQtySold int     `bson:"totalQtySold"`
+		TotalRevenue float64 `bson:"totalRevenue"`
+	}
+
+	var rawItems []rawItem
+	if err = cursor.All(ctx, &rawItems); err != nil {
 		return nil, err
+	}
+
+	var items []dto.TopSellingItem
+	if len(rawItems) == 0 {
+		return items, nil
+	}
+
+	// Fetch medicine names
+	medicineIDs := []string{}
+	for _, r := range rawItems {
+		medicineIDs = append(medicineIDs, r.MedicineId)
+	}
+	nameMap, _ := DB_GetMedicineNamesByIDs(medicineIDs)
+
+	for _, r := range rawItems {
+		items = append(items, dto.TopSellingItem{
+			MedicineID:   r.MedicineId,
+			MedicineName: nameMap[r.MedicineId],
+			TotalQtySold: r.TotalQtySold,
+			TotalRevenue: r.TotalRevenue,
+		})
 	}
 	return items, nil
 }
@@ -129,55 +143,17 @@ func DB_GetProfitMarginReport(query dto.AnalyticsQuery) ([]dto.ProfitMarginItem,
 	}
 	applyDateRange(matchFilter, query.From, query.To)
 
-	// Join bill items with batch buying prices
+	// Group by both medicineId and batchId to calculate accurate costs later
 	pipeline := mongo.Pipeline{
 		bson.D{{Key: "$match", Value: matchFilter}},
 		bson.D{{Key: "$unwind", Value: "$items"}},
-		// lookup the batch to get buying price
-		bson.D{{Key: "$lookup", Value: bson.M{
-			"from": "medicine_batches",
-			"let":  bson.M{"batchId": "$items.batchId"},
-			"pipeline": mongo.Pipeline{
-				bson.D{{Key: "$match", Value: bson.M{"$expr": bson.M{"$eq": []interface{}{bson.M{"$toString": "$_id"}, "$$batchId"}}}}},
-				bson.D{{Key: "$project", Value: bson.M{"buyingPrice": 1}}},
-			},
-			"as": "batchInfo",
-		}}},
-		bson.D{{Key: "$unwind", Value: bson.M{"path": "$batchInfo", "preserveNullAndEmptyArrays": true}}},
 		bson.D{{Key: "$group", Value: bson.M{
-			"_id":          "$items.medicineId",
+			"_id": bson.M{
+				"medicineId": "$items.medicineId",
+				"batchId":    "$items.batchId",
+			},
 			"totalQtySold": bson.M{"$sum": "$items.quantity"},
 			"totalRevenue": bson.M{"$sum": bson.M{"$multiply": []interface{}{"$items.quantity", "$items.price"}}},
-			"totalCost":    bson.M{"$sum": bson.M{"$multiply": []interface{}{"$items.quantity", "$batchInfo.buyingPrice"}}},
-		}}},
-		bson.D{{Key: "$lookup", Value: bson.M{
-			"from":         "medicines",
-			"localField":   "_id",
-			"foreignField": "medicineid",
-			"as":           "medicine",
-		}}},
-		bson.D{{Key: "$unwind", Value: bson.M{"path": "$medicine", "preserveNullAndEmptyArrays": true}}},
-		bson.D{{Key: "$sort", Value: bson.D{{Key: "totalRevenue", Value: -1}}}},
-		bson.D{{Key: "$project", Value: bson.M{
-			"medicineId":    "$_id",
-			"medicineName":  "$medicine.name",
-			"totalQtySold":  1,
-			"totalRevenue":  1,
-			"totalCost":     1,
-			"grossProfit":   bson.M{"$subtract": []interface{}{"$totalRevenue", "$totalCost"}},
-			"profitMarginPct": bson.M{
-				"$cond": []interface{}{
-					bson.M{"$eq": []interface{}{"$totalRevenue", 0}},
-					0,
-					bson.M{"$multiply": []interface{}{
-						bson.M{"$divide": []interface{}{
-							bson.M{"$subtract": []interface{}{"$totalRevenue", "$totalCost"}},
-							"$totalRevenue",
-						}},
-						100,
-					}},
-				},
-			},
 		}}},
 	}
 
@@ -187,11 +163,110 @@ func DB_GetProfitMarginReport(query dto.AnalyticsQuery) ([]dto.ProfitMarginItem,
 	}
 	defer cursor.Close(ctx)
 
-	var items []dto.ProfitMarginItem
-	if err = cursor.All(ctx, &items); err != nil {
+	type rawItem struct {
+		ID struct {
+			MedicineId string `bson:"medicineId"`
+			BatchId    string `bson:"batchId"`
+		} `bson:"_id"`
+		TotalQtySold int     `bson:"totalQtySold"`
+		TotalRevenue float64 `bson:"totalRevenue"`
+	}
+
+	var rawItems []rawItem
+	if err = cursor.All(ctx, &rawItems); err != nil {
 		return nil, err
 	}
-	return items, nil
+
+	var finalItems []dto.ProfitMarginItem
+	if len(rawItems) == 0 {
+		return finalItems, nil
+	}
+
+	// Extract IDs for Go-level resolution
+	medicineIDsMap := make(map[string]bool)
+	batchIDsMap := make(map[string]bool)
+	for _, r := range rawItems {
+		medicineIDsMap[r.ID.MedicineId] = true
+		batchIDsMap[r.ID.BatchId] = true
+	}
+
+	medicineIDs := []string{}
+	for id := range medicineIDsMap {
+		medicineIDs = append(medicineIDs, id)
+	}
+	
+	batchIDs := []string{}
+	for id := range batchIDsMap {
+		batchIDs = append(batchIDs, id)
+	}
+
+	// Fetch medicine names
+	nameMap, _ := DB_GetMedicineNamesByIDs(medicineIDs)
+
+	// Fetch batch buying prices
+	batchPrices := make(map[string]float64)
+	if len(batchIDs) > 0 {
+		batchCursor, bErr := dbConfigs.MedicineBatchCollection.Find(ctx, bson.M{"batchId": bson.M{"$in": batchIDs}})
+		if bErr == nil {
+			defer batchCursor.Close(ctx)
+			var batches []dto.MedicineBatch
+			if batchCursor.All(ctx, &batches) == nil {
+				for _, b := range batches {
+					batchPrices[b.BatchId] = b.BuyingPrice
+				}
+			}
+		}
+	}
+
+	// Aggregate by medicineId in Go
+	type aggMedicine struct {
+		TotalQtySold int
+		TotalRevenue float64
+		TotalCost    float64
+	}
+	aggregated := make(map[string]*aggMedicine)
+
+	for _, r := range rawItems {
+		medId := r.ID.MedicineId
+		if aggregated[medId] == nil {
+			aggregated[medId] = &aggMedicine{}
+		}
+		buyingPrice := batchPrices[r.ID.BatchId]
+		
+		aggregated[medId].TotalQtySold += r.TotalQtySold
+		aggregated[medId].TotalRevenue += r.TotalRevenue
+		aggregated[medId].TotalCost += float64(r.TotalQtySold) * buyingPrice
+	}
+
+	// Format final response
+	for medId, agg := range aggregated {
+		grossProfit := agg.TotalRevenue - agg.TotalCost
+		var marginPct float64
+		if agg.TotalRevenue > 0 {
+			marginPct = (grossProfit / agg.TotalRevenue) * 100
+		}
+
+		finalItems = append(finalItems, dto.ProfitMarginItem{
+			MedicineID:      medId,
+			MedicineName:    nameMap[medId],
+			TotalQtySold:    agg.TotalQtySold,
+			TotalRevenue:    agg.TotalRevenue,
+			TotalCost:       agg.TotalCost,
+			GrossProfit:     grossProfit,
+			ProfitMarginPct: marginPct,
+		})
+	}
+
+	// Sort by revenue descending (basic bubble sort since slice is likely small)
+	for i := 0; i < len(finalItems)-1; i++ {
+		for j := 0; j < len(finalItems)-i-1; j++ {
+			if finalItems[j].TotalRevenue < finalItems[j+1].TotalRevenue {
+				finalItems[j], finalItems[j+1] = finalItems[j+1], finalItems[j]
+			}
+		}
+	}
+
+	return finalItems, nil
 }
 
 // ──────────────────────────────────────────────

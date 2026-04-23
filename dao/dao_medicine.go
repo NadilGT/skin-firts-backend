@@ -167,52 +167,73 @@ func DB_GetMedicineByBarcode(barcode string) (*dto.MedicineModel, error) {
 func DB_GetLowStockMedicines() ([]dto.MedicineModel, error) {
 	ctx := context.Background()
 	
-	pipeline := mongo.Pipeline{
-		bson.D{{Key: "$lookup", Value: bson.M{
-			"from":         "medicine_batches",
-			"localField":   "medicineid",
-			"foreignField": "medicineId",
-			"as":           "batches",
-		}}},
-		bson.D{{Key: "$addFields", Value: bson.M{
-			"totalStock": bson.M{
-				"$reduce": bson.M{
-					"input":        "$batches",
-					"initialValue": 0,
-					"in": bson.M{
-						"$add": []interface{}{
-							"$$value",
-							bson.M{
-								"$cond": []interface{}{
-									bson.M{"$eq": []interface{}{"$$this.status", "ACTIVE"}},
-									"$$this.quantity",
-									0,
-								},
-							},
-						},
-					},
-				},
-			},
-		}}},
-		bson.D{{Key: "$match", Value: bson.M{
-			"$expr": bson.M{
-				"$lte": []interface{}{"$totalStock", "$minStockLevel"},
-			},
-		}}},
-	}
-
-	cursor, err := dbConfigs.MedicineCollection.Aggregate(ctx, pipeline)
+	// 1. Get all active batches
+	batchCursor, err := dbConfigs.MedicineBatchCollection.Find(ctx, bson.M{"status": "ACTIVE"})
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(ctx)
+	defer batchCursor.Close(ctx)
+
+	var activeBatches []dto.MedicineBatch
+	if err := batchCursor.All(ctx, &activeBatches); err != nil {
+		return nil, err
+	}
+
+	var activeBatchIds []string
+	for _, b := range activeBatches {
+		activeBatchIds = append(activeBatchIds, b.BatchId)
+	}
+
+	// 2. Aggregate BranchStock for these active batches to get total active stock per medicine
+	stockMap := make(map[string]int)
+	if len(activeBatchIds) > 0 {
+		pipeline := mongo.Pipeline{
+			bson.D{{Key: "$match", Value: bson.M{
+				"batchId": bson.M{"$in": activeBatchIds},
+			}}},
+			bson.D{{Key: "$group", Value: bson.M{
+				"_id": "$medicineId",
+				"totalStock": bson.M{"$sum": "$quantity"},
+			}}},
+		}
+		
+		stockCursor, err := dbConfigs.BranchStockCollection.Aggregate(ctx, pipeline)
+		if err == nil {
+			defer stockCursor.Close(ctx)
+			type rawStock struct {
+				MedicineId string `bson:"_id"`
+				TotalStock int    `bson:"totalStock"`
+			}
+			var rawStocks []rawStock
+			if stockCursor.All(ctx, &rawStocks) == nil {
+				for _, rs := range rawStocks {
+					stockMap[rs.MedicineId] = rs.TotalStock
+				}
+			}
+		}
+	}
+
+	// 3. Fetch all medicines and filter those with stock <= minStockLevel
+	medCursor, err := dbConfigs.MedicineCollection.Find(ctx, bson.M{})
+	if err != nil {
+		return nil, err
+	}
+	defer medCursor.Close(ctx)
 	
-	var medicines []dto.MedicineModel
-	if err = cursor.All(ctx, &medicines); err != nil {
+	var allMedicines []dto.MedicineModel
+	if err = medCursor.All(ctx, &allMedicines); err != nil {
 		return nil, err
 	}
 	
-	return medicines, nil
+	var lowStockMedicines []dto.MedicineModel
+	for _, m := range allMedicines {
+		totalStock := stockMap[m.MedicineId]
+		if totalStock <= m.MinStockLevel {
+			lowStockMedicines = append(lowStockMedicines, m)
+		}
+	}
+	
+	return lowStockMedicines, nil
 }
 
 // ─────────────────────────────────────────────────────
@@ -257,62 +278,91 @@ func DB_GetBranchStockByBatch(batchId, branchId string) (*dto.BranchStock, error
 	return &s, nil
 }
 
-// DB_GetAvailableBatchesFEFO performs an aggregation JOIN:
-//   branch_stock (for branchId + available qty) + medicine_batches (for expiryDate + prices)
+// DB_GetAvailableBatchesFEFO performs an aggregation JOIN in Go layer:
+//   medicine_batches (for expiryDate + prices) + branch_stock (for branchId + available qty)
 // Returns BranchStockView sorted by expiryDate ASC (First Expiring First Out).
 func DB_GetAvailableBatchesFEFO(medicineID, branchId string) ([]dto.BranchStockView, error) {
 	ctx := context.Background()
-	pipeline := bson.A{
-		// Stage 1: Filter branch_stock for this medicine+branch where available qty > 0
-		bson.M{"$match": bson.M{
-			"medicineId": medicineID,
-			"branchId":   branchId,
-			"$expr": bson.M{
-				"$gt": bson.A{
-					bson.M{"$subtract": bson.A{"$quantity", "$reservedQuantity"}},
-					0,
-				},
-			},
-		}},
-		// Stage 2: Join global batch info (expiryDate, prices, status)
-		bson.M{"$lookup": bson.M{
-			"from":         "medicine_batches",
-			"localField":   "batchId",
-			"foreignField": "batchId",
-			"as":           "batchInfo",
-		}},
-		bson.M{"$unwind": "$batchInfo"},
-		// Stage 3: Only include non-expired, non-blocked batches
-		bson.M{"$match": bson.M{
-			"batchInfo.expiryDate": bson.M{"$gt": time.Now()},
-			"batchInfo.status":     bson.M{"$ne": "BLOCKED"},
-		}},
-		// Stage 4: Project into BranchStockView shape
-		bson.M{"$project": bson.M{
-			"stockId":          "$stockId",
-			"batchId":          "$batchId",
-			"medicineId":       "$medicineId",
-			"branchId":         "$branchId",
-			"quantity":         "$quantity",
-			"reservedQuantity": "$reservedQuantity",
-			"batchNumber":      "$batchInfo.batchNumber",
-			"expiryDate":       "$batchInfo.expiryDate",
-			"sellingPrice":     "$batchInfo.sellingPrice",
-			"buyingPrice":      "$batchInfo.buyingPrice",
-			"batchStatus":      "$batchInfo.status",
-		}},
-		// Stage 5: FEFO sort — earliest expiry first
-		bson.M{"$sort": bson.D{{Key: "expiryDate", Value: 1}}},
+
+	// 1. Get non-expired, non-blocked batches for this medicine
+	batchFilter := bson.M{
+		"medicineId": medicineID,
+		"expiryDate": bson.M{"$gt": time.Now()},
+		"status":     bson.M{"$ne": "BLOCKED"},
 	}
-	cursor, err := dbConfigs.BranchStockCollection.Aggregate(ctx, pipeline)
+	batchCursor, err := dbConfigs.MedicineBatchCollection.Find(ctx, batchFilter)
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(ctx)
-	var views []dto.BranchStockView
-	if err = cursor.All(ctx, &views); err != nil {
+	defer batchCursor.Close(ctx)
+
+	var validBatches []dto.MedicineBatch
+	if err = batchCursor.All(ctx, &validBatches); err != nil {
 		return nil, err
 	}
+
+	if len(validBatches) == 0 {
+		return []dto.BranchStockView{}, nil
+	}
+
+	batchMap := make(map[string]dto.MedicineBatch)
+	var validBatchIds []string
+	for _, b := range validBatches {
+		batchMap[b.BatchId] = b
+		validBatchIds = append(validBatchIds, b.BatchId)
+	}
+
+	// 2. Find branch stock for these valid batches where available > 0
+	stockFilter := bson.M{
+		"medicineId": medicineID,
+		"branchId":   branchId,
+		"batchId":    bson.M{"$in": validBatchIds},
+		"$expr": bson.M{
+			"$gt": bson.A{
+				bson.M{"$subtract": bson.A{"$quantity", "$reservedQuantity"}},
+				0,
+			},
+		},
+	}
+	stockCursor, err := dbConfigs.BranchStockCollection.Find(ctx, stockFilter)
+	if err != nil {
+		return nil, err
+	}
+	defer stockCursor.Close(ctx)
+
+	var stocks []dto.BranchStock
+	if err = stockCursor.All(ctx, &stocks); err != nil {
+		return nil, err
+	}
+
+	// 3. Construct BranchStockView
+	var views []dto.BranchStockView
+	for _, s := range stocks {
+		batch := batchMap[s.BatchId]
+		views = append(views, dto.BranchStockView{
+			StockId:          s.StockId,
+			BatchId:          s.BatchId,
+			MedicineId:       s.MedicineId,
+			BranchId:         s.BranchId,
+			Quantity:         s.Quantity,
+			ReservedQuantity: s.ReservedQuantity,
+			BatchNumber:      batch.BatchNumber,
+			ExpiryDate:       batch.ExpiryDate,
+			SellingPrice:     batch.SellingPrice,
+			BuyingPrice:      batch.BuyingPrice,
+			BatchStatus:      batch.Status,
+		})
+	}
+
+	// 4. FEFO sort — earliest expiry first
+	for i := 0; i < len(views)-1; i++ {
+		for j := 0; j < len(views)-i-1; j++ {
+			if views[j].ExpiryDate.After(views[j+1].ExpiryDate) {
+				views[j], views[j+1] = views[j+1], views[j]
+			}
+		}
+	}
+
 	return views, nil
 }
 

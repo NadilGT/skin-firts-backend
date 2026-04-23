@@ -23,69 +23,133 @@ import (
 func DB_GetStockValuation(branchId string) (*dto.StockValuationResponse, error) {
 	ctx := context.Background()
 
-	matchStage := bson.D{{Key: "$match", Value: bson.M{"status": "ACTIVE", "quantity": bson.M{"$gt": 0}}}}
-	if branchId != "" {
-		matchStage = bson.D{{Key: "$match", Value: bson.M{
-			"status":   "ACTIVE",
-			"quantity": bson.M{"$gt": 0},
-			"branchId": branchId,
-		}}}
-	}
-
-	pipeline := mongo.Pipeline{
-		matchStage,
-		bson.D{{Key: "$group", Value: bson.M{
-			"_id":            "$medicineId",
-			"totalQty":       bson.M{"$sum": "$quantity"},
-			"avgBuyingPrice": bson.M{"$avg": "$buyingPrice"},
-			"totalCostValue": bson.M{"$sum": bson.M{"$multiply": []interface{}{"$quantity", "$buyingPrice"}}},
-			"totalSaleValue": bson.M{"$sum": bson.M{"$multiply": []interface{}{"$quantity", "$sellingPrice"}}},
-		}}},
-		bson.D{{Key: "$lookup", Value: bson.M{
-			"from":         "medicines",
-			"localField":   "_id",
-			"foreignField": "medicineid",
-			"as":           "medicine",
-		}}},
-		bson.D{{Key: "$unwind", Value: bson.M{"path": "$medicine", "preserveNullAndEmptyArrays": true}}},
-		bson.D{{Key: "$sort", Value: bson.D{{Key: "medicine.name", Value: 1}}}},
-	}
-
-	cursor, err := dbConfigs.MedicineBatchCollection.Aggregate(ctx, pipeline)
+	// 1. Get Active Batches
+	batchCursor, err := dbConfigs.MedicineBatchCollection.Find(ctx, bson.M{"status": "ACTIVE"})
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(ctx)
+	defer batchCursor.Close(ctx)
 
-	type rawItem struct {
-		MedicineID     string  `bson:"_id"`
-		TotalQty       int     `bson:"totalQty"`
-		AvgBuyingPrice float64 `bson:"avgBuyingPrice"`
-		TotalCostValue float64 `bson:"totalCostValue"`
-		TotalSaleValue float64 `bson:"totalSaleValue"`
-		Medicine       struct {
-			Name string `bson:"name"`
-		} `bson:"medicine"`
+	var activeBatches []dto.MedicineBatch
+	if err := batchCursor.All(ctx, &activeBatches); err != nil {
+		return nil, err
 	}
 
-	var rawItems []rawItem
-	if err = cursor.All(ctx, &rawItems); err != nil {
+	batchMap := make(map[string]dto.MedicineBatch)
+	var activeBatchIds []string
+	for _, b := range activeBatches {
+		batchMap[b.BatchId] = b
+		activeBatchIds = append(activeBatchIds, b.BatchId)
+	}
+
+	if len(activeBatchIds) == 0 {
+		return &dto.StockValuationResponse{BranchId: branchId, Items: []dto.StockValuationItem{}}, nil
+	}
+
+	// 2. Aggregate BranchStock for those active batches
+	matchFilter := bson.M{
+		"batchId":  bson.M{"$in": activeBatchIds},
+		"quantity": bson.M{"$gt": 0},
+	}
+	if branchId != "" {
+		matchFilter["branchId"] = branchId
+	}
+
+	pipeline := mongo.Pipeline{
+		bson.D{{Key: "$match", Value: matchFilter}},
+		bson.D{{Key: "$group", Value: bson.M{
+			"_id": bson.M{
+				"medicineId": "$medicineId",
+				"batchId":    "$batchId",
+			},
+			"totalQty": bson.M{"$sum": "$quantity"},
+		}}},
+	}
+
+	stockCursor, err := dbConfigs.BranchStockCollection.Aggregate(ctx, pipeline)
+	if err != nil {
 		return nil, err
+	}
+	defer stockCursor.Close(ctx)
+
+	type rawStockItem struct {
+		ID struct {
+			MedicineId string `bson:"medicineId"`
+			BatchId    string `bson:"batchId"`
+		} `bson:"_id"`
+		TotalQty int `bson:"totalQty"`
+	}
+
+	var rawStocks []rawStockItem
+	if err = stockCursor.All(ctx, &rawStocks); err != nil {
+		return nil, err
+	}
+
+	// 3. Collect distinct Medicine IDs
+	medIdMap := make(map[string]bool)
+	for _, rs := range rawStocks {
+		medIdMap[rs.ID.MedicineId] = true
+	}
+
+	var medicineIDs []string
+	for id := range medIdMap {
+		medicineIDs = append(medicineIDs, id)
+	}
+
+	nameMap, _ := DB_GetMedicineNamesByIDs(medicineIDs)
+
+	// 4. Calculate totals per medicine
+	type medTot struct {
+		TotalQty       int
+		TotalCostValue float64
+		TotalSaleValue float64
+		BatchCount     int
+	}
+	totals := make(map[string]*medTot)
+
+	for _, rs := range rawStocks {
+		medId := rs.ID.MedicineId
+		if totals[medId] == nil {
+			totals[medId] = &medTot{}
+		}
+
+		batch := batchMap[rs.ID.BatchId]
+		costVal := float64(rs.TotalQty) * batch.BuyingPrice
+		saleVal := float64(rs.TotalQty) * batch.SellingPrice
+
+		totals[medId].TotalQty += rs.TotalQty
+		totals[medId].TotalCostValue += costVal
+		totals[medId].TotalSaleValue += saleVal
+		totals[medId].BatchCount++
 	}
 
 	var items []dto.StockValuationItem
 	var grandCost, grandSale float64
-	for _, r := range rawItems {
+
+	for medId, tot := range totals {
+		avgBuyPrice := 0.0
+		if tot.TotalQty > 0 {
+			avgBuyPrice = tot.TotalCostValue / float64(tot.TotalQty)
+		}
 		items = append(items, dto.StockValuationItem{
-			MedicineID:     r.MedicineID,
-			MedicineName:   r.Medicine.Name,
-			TotalQty:       r.TotalQty,
-			AvgBuyingPrice: r.AvgBuyingPrice,
-			TotalCostValue: r.TotalCostValue,
-			TotalSaleValue: r.TotalSaleValue,
+			MedicineID:     medId,
+			MedicineName:   nameMap[medId],
+			TotalQty:       tot.TotalQty,
+			AvgBuyingPrice: avgBuyPrice,
+			TotalCostValue: tot.TotalCostValue,
+			TotalSaleValue: tot.TotalSaleValue,
 		})
-		grandCost += r.TotalCostValue
-		grandSale += r.TotalSaleValue
+		grandCost += tot.TotalCostValue
+		grandSale += tot.TotalSaleValue
+	}
+
+	// Sort items by name (simple bubble sort)
+	for i := 0; i < len(items)-1; i++ {
+		for j := 0; j < len(items)-i-1; j++ {
+			if items[j].MedicineName > items[j+1].MedicineName {
+				items[j], items[j+1] = items[j+1], items[j]
+			}
+		}
 	}
 
 	return &dto.StockValuationResponse{
@@ -105,81 +169,97 @@ func DB_GetExpiryAlerts(branchId string, days int) ([]dto.ExpiryAlertItem, error
 	ctx := context.Background()
 	threshold := time.Now().AddDate(0, 0, days)
 
-	pipeline := bson.A{
-		// 1. Join branch_stock with medicine_batches
-		bson.M{"$lookup": bson.M{
-			"from":         "medicine_batches",
-			"localField":   "batchId",
-			"foreignField": "batchId",
-			"as":           "batchInfo",
-		}},
-		bson.M{"$unwind": "$batchInfo"},
-		// 2. Filter: quantity > 0, expiryDate <= threshold && >= now
-		bson.M{"$match": bson.M{
-			"quantity": bson.M{"$gt": 0},
-			"batchInfo.expiryDate": bson.M{
-				"$lte": threshold,
-				"$gte": time.Now(),
-			},
-		}},
+	// 1. Find batches that are expiring soon
+	batchFilter := bson.M{
+		"expiryDate": bson.M{
+			"$lte": threshold,
+			"$gte": time.Now(),
+		},
 	}
-	
-	if branchId != "" {
-		pipeline = append([]interface{}{
-			bson.M{"$match": bson.M{"branchId": branchId}},
-		}, pipeline...)
-	}
-
-	// 3. Sort by expiry date ascending
-	pipeline = append(pipeline, bson.M{"$sort": bson.D{{Key: "batchInfo.expiryDate", Value: 1}}})
-
-	cursor, err := dbConfigs.BranchStockCollection.Aggregate(ctx, pipeline)
+	batchCursor, err := dbConfigs.MedicineBatchCollection.Find(ctx, batchFilter)
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(ctx)
+	defer batchCursor.Close(ctx)
 
-	// We decode into an anonymous struct temporarily since it's an aggregation result
-	var results []struct {
-		StockId    string           `bson:"stockId"`
-		MedicineId string           `bson:"medicineId"`
-		BranchId   string           `bson:"branchId"`
-		Quantity   int              `bson:"quantity"`
-		BatchInfo  dto.MedicineBatch `bson:"batchInfo"`
-	}
-	if err = cursor.All(ctx, &results); err != nil {
+	var expiringBatches []dto.MedicineBatch
+	if err = batchCursor.All(ctx, &expiringBatches); err != nil {
 		return nil, err
 	}
 
-	// Gather medicine names
+	if len(expiringBatches) == 0 {
+		return []dto.ExpiryAlertItem{}, nil
+	}
+
+	batchMap := make(map[string]dto.MedicineBatch)
+	var expiringBatchIds []string
+	for _, b := range expiringBatches {
+		batchMap[b.BatchId] = b
+		expiringBatchIds = append(expiringBatchIds, b.BatchId)
+	}
+
+	// 2. Find branch stock for these batches
+	stockFilter := bson.M{
+		"batchId":  bson.M{"$in": expiringBatchIds},
+		"quantity": bson.M{"$gt": 0},
+	}
+	if branchId != "" {
+		stockFilter["branchId"] = branchId
+	}
+
+	stockCursor, err := dbConfigs.BranchStockCollection.Find(ctx, stockFilter)
+	if err != nil {
+		return nil, err
+	}
+	defer stockCursor.Close(ctx)
+
+	var stocks []dto.BranchStock
+	if err = stockCursor.All(ctx, &stocks); err != nil {
+		return nil, err
+	}
+
+	if len(stocks) == 0 {
+		return []dto.ExpiryAlertItem{}, nil
+	}
+
+	// 3. Gather medicine names
 	medicineIDs := make([]string, 0)
 	seen := map[string]bool{}
-	for _, r := range results {
-		if !seen[r.MedicineId] {
-			medicineIDs = append(medicineIDs, r.MedicineId)
-			seen[r.MedicineId] = true
+	for _, s := range stocks {
+		if !seen[s.MedicineId] {
+			medicineIDs = append(medicineIDs, s.MedicineId)
+			seen[s.MedicineId] = true
 		}
 	}
-	nameMap, err := DB_GetMedicineNamesByIDs(medicineIDs)
-	if err != nil {
-		nameMap = map[string]string{}
-	}
+	nameMap, _ := DB_GetMedicineNamesByIDs(medicineIDs)
 
+	// 4. Construct response
 	var alerts []dto.ExpiryAlertItem
 	now := time.Now()
-	for _, r := range results {
-		daysLeft := int(r.BatchInfo.ExpiryDate.Sub(now).Hours() / 24)
+	for _, s := range stocks {
+		batchInfo := batchMap[s.BatchId]
+		daysLeft := int(batchInfo.ExpiryDate.Sub(now).Hours() / 24)
 		alerts = append(alerts, dto.ExpiryAlertItem{
-			BatchID:      r.BatchInfo.BatchId,
-			MedicineID:   r.MedicineId,
-			MedicineName: nameMap[r.MedicineId],
-			BatchNumber:  r.BatchInfo.BatchNumber,
-			ExpiryDate:   r.BatchInfo.ExpiryDate,
-			Quantity:     r.Quantity,
+			BatchID:      batchInfo.BatchId,
+			MedicineID:   s.MedicineId,
+			MedicineName: nameMap[s.MedicineId],
+			BatchNumber:  batchInfo.BatchNumber,
+			ExpiryDate:   batchInfo.ExpiryDate,
+			Quantity:     s.Quantity,
 			DaysToExpiry: daysLeft,
-			BranchId:     r.BranchId,
+			BranchId:     s.BranchId,
 		})
 	}
+
+	// Sort by expiry date ascending (simple bubble sort)
+	for i := 0; i < len(alerts)-1; i++ {
+		for j := 0; j < len(alerts)-i-1; j++ {
+			if alerts[j].ExpiryDate.After(alerts[j+1].ExpiryDate) {
+				alerts[j], alerts[j+1] = alerts[j+1], alerts[j]
+			}
+		}
+	}
+
 	return alerts, nil
 }
 
@@ -445,66 +525,116 @@ func DB_CancelStockTransfer(transferId string) error {
 func DB_GetStockReport(branchId string) ([]dto.StockReportItem, error) {
 	ctx := context.Background()
 
-	matchStage := bson.D{{Key: "$match", Value: bson.M{"status": "ACTIVE"}}}
-	if branchId != "" {
-		matchStage = bson.D{{Key: "$match", Value: bson.M{"status": "ACTIVE", "branchId": branchId}}}
-	}
-
-	pipeline := mongo.Pipeline{
-		matchStage,
-		bson.D{{Key: "$group", Value: bson.M{
-			"_id":          "$medicineId",
-			"totalQty":     bson.M{"$sum": "$quantity"},
-			"totalBatches": bson.M{"$sum": 1},
-		}}},
-		bson.D{{Key: "$lookup", Value: bson.M{
-			"from":         "medicines",
-			"localField":   "_id",
-			"foreignField": "medicineid",
-			"as":           "medicine",
-		}}},
-		bson.D{{Key: "$unwind", Value: bson.M{"path": "$medicine", "preserveNullAndEmptyArrays": true}}},
-		bson.D{{Key: "$sort", Value: bson.D{{Key: "medicine.name", Value: 1}}}},
-	}
-
-	cursor, err := dbConfigs.MedicineBatchCollection.Aggregate(ctx, pipeline)
+	// 1. Get Active Batches
+	batchCursor, err := dbConfigs.MedicineBatchCollection.Find(ctx, bson.M{"status": "ACTIVE"})
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(ctx)
+	defer batchCursor.Close(ctx)
 
-	type rawItem struct {
-		MedicineID   string `bson:"_id"`
-		TotalQty     int    `bson:"totalQty"`
-		TotalBatches int    `bson:"totalBatches"`
-		Medicine     struct {
-			Name         string `bson:"name"`
-			Category     string `bson:"category"`
-			MinStockLevel int   `bson:"minStockLevel"`
-			ReorderLevel int    `bson:"reorderLevel"`
-		} `bson:"medicine"`
-	}
-
-	var rawItems []rawItem
-	if err = cursor.All(ctx, &rawItems); err != nil {
+	var activeBatches []dto.MedicineBatch
+	if err := batchCursor.All(ctx, &activeBatches); err != nil {
 		return nil, err
 	}
 
+	var activeBatchIds []string
+	for _, b := range activeBatches {
+		activeBatchIds = append(activeBatchIds, b.BatchId)
+	}
+
+	if len(activeBatchIds) == 0 {
+		return []dto.StockReportItem{}, nil
+	}
+
+	// 2. Aggregate BranchStock for those batches
+	matchFilter := bson.M{
+		"batchId": bson.M{"$in": activeBatchIds},
+	}
+	if branchId != "" {
+		matchFilter["branchId"] = branchId
+	}
+
+	pipeline := mongo.Pipeline{
+		bson.D{{Key: "$match", Value: matchFilter}},
+		bson.D{{Key: "$group", Value: bson.M{
+			"_id":          "$medicineId",
+			"totalQty":     bson.M{"$sum": "$quantity"},
+			// totalBatches: number of unique batches with stock for this medicine
+			"batchesSet":   bson.M{"$addToSet": "$batchId"},
+		}}},
+	}
+
+	stockCursor, err := dbConfigs.BranchStockCollection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return nil, err
+	}
+	defer stockCursor.Close(ctx)
+
+	type rawItem struct {
+		MedicineID string   `bson:"_id"`
+		TotalQty   int      `bson:"totalQty"`
+		BatchesSet []string `bson:"batchesSet"`
+	}
+
+	var rawItems []rawItem
+	if err = stockCursor.All(ctx, &rawItems); err != nil {
+		return nil, err
+	}
+
+	if len(rawItems) == 0 {
+		return []dto.StockReportItem{}, nil
+	}
+
+	// 3. Collect distinct Medicine IDs
+	var medicineIDs []string
+	for _, r := range rawItems {
+		medicineIDs = append(medicineIDs, r.MedicineID)
+	}
+
+	// Fetch full medicine details since we need Category, MinStockLevel, ReorderLevel
+	medCursor, err := dbConfigs.MedicineCollection.Find(ctx, bson.M{"medicineid": bson.M{"$in": medicineIDs}})
+	if err != nil {
+		return nil, err
+	}
+	defer medCursor.Close(ctx)
+
+	var medicines []dto.MedicineModel
+	if err = medCursor.All(ctx, &medicines); err != nil {
+		return nil, err
+	}
+
+	medMap := make(map[string]dto.MedicineModel)
+	for _, m := range medicines {
+		medMap[m.MedicineId] = m
+	}
+
+	// 4. Construct report
 	var report []dto.StockReportItem
 	for _, r := range rawItems {
-		reorder := r.Medicine.ReorderLevel
+		med := medMap[r.MedicineID]
+		reorder := med.ReorderLevel
 		if reorder == 0 {
-			reorder = r.Medicine.MinStockLevel
+			reorder = med.MinStockLevel
 		}
 		report = append(report, dto.StockReportItem{
 			MedicineID:   r.MedicineID,
-			MedicineName: r.Medicine.Name,
-			Category:     r.Medicine.Category,
+			MedicineName: med.Name,
+			Category:     med.Category,
 			TotalQty:     r.TotalQty,
 			ReorderLevel: reorder,
 			IsLowStock:   r.TotalQty <= reorder,
-			TotalBatches: r.TotalBatches,
+			TotalBatches: len(r.BatchesSet),
 		})
 	}
+
+	// Sort by medicine name ascending
+	for i := 0; i < len(report)-1; i++ {
+		for j := 0; j < len(report)-i-1; j++ {
+			if report[j].MedicineName > report[j+1].MedicineName {
+				report[j], report[j+1] = report[j+1], report[j]
+			}
+		}
+	}
+
 	return report, nil
 }

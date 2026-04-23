@@ -64,46 +64,58 @@ func ConnectMongoDB(uri string) *mongo.Client {
 	fmt.Println("Connected to MongoDB")
 	MongoClient = client
 
-	db := MongoClient.Database("SkinFirts")
-	fmt.Println(db.Name())
+	coreMedicalDb := client.Database("core_medical_db")
+	userManagementDb := client.Database("user_management_db")
+	pharmacyInventoryDb := client.Database("pharmacy_inventory_db")
+	erpOperationsDb := client.Database("erp_operations_db")
+	billingFinanceDb := client.Database("billing_finance_db")
+	analyticsDb := client.Database("analytics_db")
+	systemDb := client.Database("system_db")
 
-	FeaturedLawyerCollection = db.Collection("Doctors")
-	DoctorInfoCollection = db.Collection("doctor_info")
-	AppointmentCollection = db.Collection("appointments")
-	DoctorScheduleCollection = db.Collection("doctor_schedules")
-	MedicineCollection = db.Collection("medicines")
-	MedicineBatchCollection = db.Collection("medicine_batches")
-	BranchStockCollection = db.Collection("branch_stock")
-	IdCounters = db.Collection("id_counters")
-	MedicineOrderCollection = db.Collection("medicine_orders")
-	FocusCollection = db.Collection("focus_categories")
-	DoctorWeeklyScheduleCollection = db.Collection("doctor_weekly_schedules")
-	DoctorAvailabilityCollection = db.Collection("doctor_availabilities")
-	BillCollection = db.Collection("bills")
-	HospitalBillCollection = db.Collection("hospital_bills")
+	// core_medical_db
+	FeaturedLawyerCollection = coreMedicalDb.Collection("Doctors")
+	DoctorInfoCollection = coreMedicalDb.Collection("doctor_info")
+	AppointmentCollection = coreMedicalDb.Collection("appointments")
+	DoctorScheduleCollection = coreMedicalDb.Collection("doctor_schedules")
+	DoctorWeeklyScheduleCollection = coreMedicalDb.Collection("doctor_weekly_schedules")
+	DoctorAvailabilityCollection = coreMedicalDb.Collection("doctor_availabilities")
+	FocusCollection = coreMedicalDb.Collection("focus_categories")
+	ServiceCollection = coreMedicalDb.Collection("services")
 
-	// Role-based user collections
-	PatientCollection = db.Collection("patients")
-	DoctorUserCollection = db.Collection("doctor_users")
-	AdminUserCollection = db.Collection("admin_users")
-	StaffUserCollection = db.Collection("staff_users")
-	ReportCollection = db.Collection("reports")
-	NotificationCollection = db.Collection("notifications")
-	ServiceCollection = db.Collection("services")
+	// pharmacy_inventory_db
+	MedicineCollection = pharmacyInventoryDb.Collection("medicines")
+	MedicineBatchCollection = pharmacyInventoryDb.Collection("medicine_batches")
+	BranchStockCollection = pharmacyInventoryDb.Collection("branch_stock")
+	StockMovementCollection = pharmacyInventoryDb.Collection("stock_movements")
+	RejectStockCollection = pharmacyInventoryDb.Collection("reject_stock")
+	StockAdjustmentCollection = pharmacyInventoryDb.Collection("stock_adjustments")
 
-	// New pharmacy modules
-	BranchCollection = db.Collection("branches")
-	SupplierCollection = db.Collection("suppliers")
-	PurchaseOrderCollection = db.Collection("purchase_orders")
-	GRNCollection = db.Collection("grn")
-	StockTransferCollection = db.Collection("stock_transfers")
+	// system_db
+	IdCounters = systemDb.Collection("id_counters")
 
-	// ERP/WMS audit + workflow collections
-	StockMovementCollection = db.Collection("stock_movements")
-	RejectStockCollection = db.Collection("reject_stock")
-	SupplierBillCollection = db.Collection("supplier_bills")
-	ApprovalCollection = db.Collection("approvals")
-	StockAdjustmentCollection = db.Collection("stock_adjustments")
+	// billing_finance_db
+	BillCollection = billingFinanceDb.Collection("bills")
+	HospitalBillCollection = billingFinanceDb.Collection("hospital_bills")
+	MedicineOrderCollection = billingFinanceDb.Collection("medicine_orders")
+
+	// user_management_db
+	PatientCollection = userManagementDb.Collection("patients")
+	DoctorUserCollection = userManagementDb.Collection("doctor_users")
+	AdminUserCollection = userManagementDb.Collection("admin_users")
+	StaffUserCollection = userManagementDb.Collection("staff_users")
+	NotificationCollection = userManagementDb.Collection("notifications")
+
+	// analytics_db
+	ReportCollection = analyticsDb.Collection("reports")
+
+	// erp_operations_db
+	BranchCollection = erpOperationsDb.Collection("branches")
+	SupplierCollection = erpOperationsDb.Collection("suppliers")
+	PurchaseOrderCollection = erpOperationsDb.Collection("purchase_orders")
+	GRNCollection = erpOperationsDb.Collection("grn")
+	StockTransferCollection = erpOperationsDb.Collection("stock_transfers")
+	SupplierBillCollection = erpOperationsDb.Collection("supplier_bills")
+	ApprovalCollection = erpOperationsDb.Collection("approvals")
 
 	return client
 }
