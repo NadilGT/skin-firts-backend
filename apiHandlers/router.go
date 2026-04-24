@@ -132,7 +132,7 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 
 	// Hospital Bill Routes
 	app.Post("/billing/hospital-bill", authMiddleware.ValidateToken, BranchMiddleware, api.CreateHospitalBill)
-	app.Put("/billing/hospital-bill/confirm/:id", authMiddleware.ValidateToken, BranchMiddleware, api.ConfirmHospitalBill)
+	app.Put("/billing/hospital-bill/confirm/id", authMiddleware.ValidateToken, BranchMiddleware, api.ConfirmHospitalBill)
 	app.Get("/billing/hospital-bill/:id/pdf", api.DownloadHospitalBillPDF)
 
 	// ========== MEDICINE ORDER ROUTES ==========
