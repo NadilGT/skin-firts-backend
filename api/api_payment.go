@@ -40,7 +40,13 @@ func GetPharmacyBillByID(c *fiber.Ctx) error {
 	if billId == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Missing billId"})
 	}
-	bill, err := dao.DB_GetBillByBillId(billId)
+
+	branchId, err := ResolveBranchId(c, c.Query("branchId"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	bill, err := dao.DB_GetBillByBillId(billId, branchId)
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Bill not found"})
 	}
@@ -49,6 +55,11 @@ func GetPharmacyBillByID(c *fiber.Ctx) error {
 
 func UpdatePharmacyBillPayment(c *fiber.Ctx) error {
 	billId := c.Params("billId")
+	branchId, err := ResolveBranchId(c, c.Query("branchId"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+
 	if billId == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Missing billId"})
 	}
@@ -59,11 +70,11 @@ func UpdatePharmacyBillPayment(c *fiber.Ctx) error {
 	if req.PaidAmount <= 0 {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "PaidAmount must be greater than 0"})
 	}
-	if err := dao.DB_UpdateBillPayment(billId, req); err != nil {
+	if err := dao.DB_UpdateBillPayment(billId, branchId, req); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update payment: " + err.Error()})
 	}
 	// Return updated bill
-	bill, _ := dao.DB_GetBillByBillId(billId)
+	bill, _ := dao.DB_GetBillByBillId(billId, branchId)
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Payment updated successfully", "data": bill})
 }
 

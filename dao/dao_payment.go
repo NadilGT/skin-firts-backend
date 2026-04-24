@@ -77,8 +77,8 @@ func DB_SearchPharmacyBills(query dto.SearchBillQuery) ([]dto.BillModel, int64, 
 	return bills, total, nil
 }
 
-func DB_UpdateBillPayment(billId string, req dto.UpdateBillPaymentRequest) error {
-	bill, err := DB_GetBillByBillId(billId)
+func DB_UpdateBillPayment(billId string, branchId string, req dto.UpdateBillPaymentRequest) error {
+	bill, err := DB_GetBillByBillId(billId, branchId)
 	if err != nil {
 		return err
 	}
@@ -92,6 +92,9 @@ func DB_UpdateBillPayment(billId string, req dto.UpdateBillPaymentRequest) error
 	}
 
 	filter := bson.M{"billId": billId}
+	if branchId != "" {
+		filter["branchId"] = branchId
+	}
 	update := bson.M{
 		"$set": bson.M{
 			"paidAmount":    newPaid,

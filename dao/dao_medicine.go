@@ -46,7 +46,7 @@ func DB_ExpireOldBills() {
 	for _, bill := range expiredBills {
 		// Logically this is exactly what CancelBill does
 		DB_RevertStockReservation(bill.Items)
-		_ = DB_UpdateBillStatus(bill.BillId, "CANCELLED")
+		_ = DB_UpdateBillStatus(bill.BillId, "CANCELLED", bill.BranchId)
 		fmt.Printf("[WMS-CRON] Auto-expired Bill %s\n", bill.BillId)
 	}
 }
@@ -610,23 +610,30 @@ func DB_CreateBill(bill dto.BillModel) error {
 	return err
 }
 
-func DB_GetBillByBillId(billId string) (*dto.BillModel, error) {
+func DB_GetBillByBillId(billId string, branchId string) (*dto.BillModel, error) {
 	var bill dto.BillModel
-	err := dbConfigs.BillCollection.FindOne(context.Background(), bson.M{"billId": billId}).Decode(&bill)
+	filter := bson.M{"billId": billId}
+	if branchId != "" {
+		filter["branchId"] = branchId
+	}
+	err := dbConfigs.BillCollection.FindOne(context.Background(), filter).Decode(&bill)
 	if err != nil {
-	return nil, err
+		return nil, err
 	}
 	return &bill, nil
 }
 
-func DB_UpdateBillStatus(billId string, status string) error {
+func DB_UpdateBillStatus(billId string, status string, branchId string) error {
 	filter := bson.M{"billId": billId}
+	if branchId != "" {
+		filter["branchId"] = branchId
+	}
 	update := bson.M{
-	"$set": bson.M{
-	"status":    status,
-	"updatedAt": time.Now(),
-	},
-}
+		"$set": bson.M{
+			"status":    status,
+			"updatedAt": time.Now(),
+		},
+	}
 	_, err := dbConfigs.BillCollection.UpdateOne(context.Background(), filter, update)
 	return err
 }

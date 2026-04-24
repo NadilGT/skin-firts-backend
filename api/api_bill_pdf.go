@@ -12,12 +12,17 @@ import (
 // GET /billing/pdf?billId=BIL-001
 func GenerateBillPDF(c *fiber.Ctx) error {
 	billId := c.Query("billId")
+	branchId, err := ResolveBranchId(c, c.Query("branchId"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+
 	if billId == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "billId query param is required"})
 	}
 
 	// 1. Fetch the bill
-	bill, err := dao.DB_GetBillByBillId(billId)
+	bill, err := dao.DB_GetBillByBillId(billId, branchId)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Bill not found"})

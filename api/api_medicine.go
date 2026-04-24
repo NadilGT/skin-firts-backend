@@ -447,7 +447,12 @@ func CreateBill(c *fiber.Ctx) error {
 // CancelBill manually cancels a pending bill and releases its reserved stock immediately.
 func CancelBill(c *fiber.Ctx) error {
 	billId := c.Query("billId")
-	bill, err := dao.DB_GetBillByBillId(billId)
+	branchId, err := ResolveBranchId(c, c.Query("branchId"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	bill, err := dao.DB_GetBillByBillId(billId, branchId)
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Bill not found"})
 	}
@@ -459,7 +464,7 @@ func CancelBill(c *fiber.Ctx) error {
 	dao.DB_RevertStockReservation(bill.Items)
 
 	// Update bill status to CANCELLED
-	if err := dao.DB_UpdateBillStatus(billId, "CANCELLED"); err != nil {
+	if err := dao.DB_UpdateBillStatus(billId, "CANCELLED", branchId); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to cancel bill"})
 	}
 
@@ -468,8 +473,12 @@ func CancelBill(c *fiber.Ctx) error {
 
 func ConfirmBill(c *fiber.Ctx) error {
 	billId := c.Query("billId")
+	branchId, err := ResolveBranchId(c, c.Query("branchId"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
 
-	bill, err := dao.DB_GetBillByBillId(billId)
+	bill, err := dao.DB_GetBillByBillId(billId, branchId)
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 			"error": "Bill not found",
@@ -490,7 +499,7 @@ func ConfirmBill(c *fiber.Ctx) error {
 		if err != nil {
 			// Someone bought this exact batch between creation and confirmation
 			dao.DB_RevertStockDeduction(successfullyDeducted)
-			dao.DB_UpdateBillStatus(billId, "FAILED")
+			dao.DB_UpdateBillStatus(billId, "FAILED", branchId)
 			return c.Status(fiber.StatusConflict).JSON(fiber.Map{
 				"error": fmt.Sprintf("Failed to confirm bill: Stock for medicine %s is no longer available. Please create a new bill.", item.MedicineID),
 			})
@@ -503,7 +512,7 @@ func ConfirmBill(c *fiber.Ctx) error {
 	}
 
 	// All stock deducted successfully, mark bill as confirmed
-	err = dao.DB_UpdateBillStatus(billId, "CONFIRMED")
+	err = dao.DB_UpdateBillStatus(billId, "CONFIRMED", branchId)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Failed to update bill status, but stock was deducted",

@@ -127,7 +127,7 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 	app.Post("/billing/deduct", authMiddleware.ValidateToken, BranchMiddleware, api.DeductStockFEFO)
 	app.Post("/billing/create-bill", authMiddleware.ValidateToken, BranchMiddleware, api.CreateBill)
 	app.Post("/billing/cancel-bill", authMiddleware.ValidateToken, BranchMiddleware, api.CancelBill)
-	app.Post("/billing/confirm/:billId", authMiddleware.ValidateToken, BranchMiddleware, api.ConfirmBill)
+	app.Post("/billing/confirm/billId", authMiddleware.ValidateToken, BranchMiddleware, api.ConfirmBill)
 	app.Get("/billing/pdf", api.GenerateBillPDF)
 
 	// Hospital Bill Routes
