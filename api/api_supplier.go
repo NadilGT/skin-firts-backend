@@ -171,7 +171,13 @@ func GetPurchaseOrderByID(c *fiber.Ctx) error {
 	if id == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Missing purchase order ID"})
 	}
-	po, err := dao.DB_GetPurchaseOrderByID(id)
+
+	branchId, err := ResolveBranchId(c, c.Query("branchId"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	po, err := dao.DB_GetPurchaseOrderByID(id, branchId)
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Purchase order not found"})
 	}
@@ -192,7 +198,13 @@ func UpdatePurchaseOrderStatus(c *fiber.Ctx) error {
 	}
 	// Extract caller identity for approval audit trail
 	approvedBy, _ := c.Locals("uid").(string)
-	if err := dao.DB_UpdatePOStatus(id, req, approvedBy); err != nil {
+
+	branchId, err := ResolveBranchId(c, c.Query("branchId"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	if err := dao.DB_UpdatePOStatus(id, branchId, req, approvedBy); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update PO status: " + err.Error()})
 	}
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Purchase order status updated to " + req.Status})
@@ -268,7 +280,16 @@ func GetGRNs(c *fiber.Ctx) error {
 
 func GetGRNByID(c *fiber.Ctx) error {
 	id := c.Query("id")
-	grn, err := dao.DB_GetGRNByID(id)
+	if id == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Missing GRN ID"})
+	}
+
+	branchId, err := ResolveBranchId(c, c.Query("branchId"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	grn, err := dao.DB_GetGRNByID(id, branchId)
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "GRN not found"})
 	}

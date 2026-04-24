@@ -96,9 +96,13 @@ func DB_CreatePurchaseOrder(po dto.PurchaseOrderModel) error {
 	return err
 }
 
-func DB_GetPurchaseOrderByID(poId string) (*dto.PurchaseOrderModel, error) {
+func DB_GetPurchaseOrderByID(poId string, branchId string) (*dto.PurchaseOrderModel, error) {
 	var po dto.PurchaseOrderModel
-	err := dbConfigs.PurchaseOrderCollection.FindOne(context.Background(), bson.M{"poId": poId}).Decode(&po)
+	filter := bson.M{"poId": poId}
+	if branchId != "" {
+		filter["branchId"] = branchId
+	}
+	err := dbConfigs.PurchaseOrderCollection.FindOne(context.Background(), filter).Decode(&po)
 	if err != nil {
 		return nil, err
 	}
@@ -137,9 +141,12 @@ func DB_SearchPurchaseOrders(query dto.SearchPOQuery) ([]dto.PurchaseOrderModel,
 	return pos, total, nil
 }
 
-func DB_UpdatePOStatus(poId string, req dto.UpdatePOStatusRequest, approvedBy string) error {
+func DB_UpdatePOStatus(poId string, branchId string, req dto.UpdatePOStatusRequest, approvedBy string) error {
 	ctx := context.Background()
 	filter := bson.M{"poId": poId}
+	if branchId != "" {
+		filter["branchId"] = branchId
+	}
 	update := bson.M{
 		"$set": bson.M{
 			"status":    req.Status,
@@ -155,7 +162,7 @@ func DB_UpdatePOStatus(poId string, req dto.UpdatePOStatusRequest, approvedBy st
 	// When a PO is approved, create an Approval record so GRN can gate on it
 	if req.Status == "APPROVED" {
 		// Fetch the PO to get its business ID
-		po, poErr := DB_GetPurchaseOrderByID(poId)
+		po, poErr := DB_GetPurchaseOrderByID(poId, branchId)
 		if poErr == nil && po != nil {
 			approvalId, aErr := GenerateId(ctx, "approvals", "APR")
 			if aErr == nil {
@@ -190,7 +197,7 @@ func DB_CreateGRN(grn dto.GRNModel) error {
 	if grn.PoId != "" {
 		// fetch PO to check status
 		var err error
-		po, err = DB_GetPurchaseOrderByID(grn.PoId)
+		po, err = DB_GetPurchaseOrderByID(grn.PoId, grn.BranchId)
 		if err != nil {
 			return fmt.Errorf("PO check failed: %v", err)
 		}
@@ -206,7 +213,7 @@ func DB_CreateGRN(grn dto.GRNModel) error {
 
 	// Auto set PO to PARTIALLY_RECEIVED
 	if po != nil && po.Status == "APPROVED" {
-		_ = DB_UpdatePOStatus(po.PoId, dto.UpdatePOStatusRequest{Status: "PARTIALLY_RECEIVED", Notes: "System updated from GRN creation"}, grn.ReceivedBy)
+		_ = DB_UpdatePOStatus(po.PoId, po.BranchId, dto.UpdatePOStatusRequest{Status: "PARTIALLY_RECEIVED", Notes: "System updated from GRN creation"}, grn.ReceivedBy)
 	}
 
 	// Auto-create medicine batches (global) + branch stock (per-branch) and write PURCHASE movements
@@ -285,9 +292,13 @@ func dao_CreateMedicineBatch(ctx context.Context, batch dto.MedicineBatch) error
 }
 
 
-func DB_GetGRNByID(id string) (*dto.GRNModel, error) {
+func DB_GetGRNByID(id string, branchId string) (*dto.GRNModel, error) {
 	var grn dto.GRNModel
-	err := dbConfigs.GRNCollection.FindOne(context.Background(), bson.M{"grnId": id}).Decode(&grn)
+	filter := bson.M{"grnId": id}
+	if branchId != "" {
+		filter["branchId"] = branchId
+	}
+	err := dbConfigs.GRNCollection.FindOne(context.Background(), filter).Decode(&grn)
 	if err != nil {
 		return nil, err
 	}
