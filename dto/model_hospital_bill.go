@@ -31,6 +31,7 @@ type HospitalBillModel struct {
 	Discount       float64             `json:"discount" bson:"discount"`
 	Tax            float64             `json:"tax" bson:"tax"`
 	TotalAmount    float64             `json:"totalAmount" bson:"totalAmount"`
+	BranchId       string              `json:"branchId" bson:"branchId"`
 	Confirm        bool                `json:"confirm" bson:"confirm"`
 	CreatedAt      time.Time           `json:"createdAt" bson:"createdAt"`
 	UpdatedAt      time.Time           `json:"updatedAt" bson:"updatedAt"`
@@ -44,6 +45,7 @@ type BillServiceItem struct {
 
 // CreateHospitalBillRequest represents the incoming request payload for bill creation
 type CreateHospitalBillRequest struct {
+	BranchId     string            `json:"branchId"`
 	Items        []BillServiceItem `json:"items" validate:"required,min=1"`
 	PatientID    string            `json:"patientId"`
 	PatientName  string            `json:"patientName"`

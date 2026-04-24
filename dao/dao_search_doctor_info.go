@@ -10,7 +10,7 @@ import (
 )
 
 // DB_SearchDoctorInfo searches for doctors in the doctor_info collection.
-func DB_SearchDoctorInfo(query dto.SearchDoctorInfoQuery) ([]dto.DoctorInfoModel, int64, error) {
+func DB_SearchDoctorInfo(query dto.SearchDoctorInfoQuery, branchId string) ([]dto.DoctorInfoModel, int64, error) {
 	ctx := context.Background()
 
 	// 1. Build the filter
@@ -28,6 +28,10 @@ func DB_SearchDoctorInfo(query dto.SearchDoctorInfoQuery) ([]dto.DoctorInfoModel
 	
 	if query.Special != "" {
 		filter["special"] = bson.M{"$regex": query.Special, "$options": "i"}
+	}
+	
+	if branchId != "" {
+		filter["branchIds"] = branchId
 	}
 
 	// 2. Get Total Count

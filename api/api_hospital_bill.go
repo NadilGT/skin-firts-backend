@@ -21,6 +21,11 @@ func CreateHospitalBill(c *fiber.Ctx) error {
 		})
 	}
 
+	branchId, err := ResolveBranchId(c, req.BranchId)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+
 	if len(req.Items) == 0 {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "At least one service item is required",
@@ -97,6 +102,7 @@ func CreateHospitalBill(c *fiber.Ctx) error {
 		Discount:       req.Discount,
 		Tax:            req.Tax,
 		TotalAmount:    finalTotal,
+		BranchId:       branchId,
 		Confirm:        false,
 		CreatedAt:      time.Now(),
 		UpdatedAt:      time.Now(),
@@ -130,13 +136,18 @@ func CreateHospitalBill(c *fiber.Ctx) error {
 // DownloadHospitalBillPDF generates the PDF on the fly and streams it back.
 func DownloadHospitalBillPDF(c *fiber.Ctx) error {
 	hospitalBillId := c.Params("id")
+	branchId, err := ResolveBranchId(c, c.Query("branchId"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+
 	if hospitalBillId == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "Bill ID is required",
 		})
 	}
 
-	bill, err := dao.DB_GetHospitalBill(hospitalBillId)
+	bill, err := dao.DB_GetHospitalBill(hospitalBillId, branchId)
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 			"error": "Hospital bill not found",
@@ -158,13 +169,18 @@ func DownloadHospitalBillPDF(c *fiber.Ctx) error {
 // ConfirmHospitalBill marks a hospital bill as confirmed.
 func ConfirmHospitalBill(c *fiber.Ctx) error {
 	hospitalBillId := c.Query("id")
+	branchId, err := ResolveBranchId(c, c.Query("branchId"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+
 	if hospitalBillId == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "Bill ID is required",
 		})
 	}
 
-	bill, err := dao.DB_GetHospitalBill(hospitalBillId)
+	bill, err := dao.DB_GetHospitalBill(hospitalBillId, branchId)
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 			"error": "Hospital bill not found",
@@ -177,7 +193,7 @@ func ConfirmHospitalBill(c *fiber.Ctx) error {
 		})
 	}
 
-	err = dao.DB_ConfirmHospitalBill(hospitalBillId)
+	err = dao.DB_ConfirmHospitalBill(hospitalBillId, branchId)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Failed to confirm bill: " + err.Error(),

@@ -11,6 +11,11 @@ import (
 // GET /doctors/search?query=...&focus=...&special=...&page=...&limit=...
 func SearchDoctorInfo(c *fiber.Ctx) error {
 	var query dto.SearchDoctorInfoQuery
+	branchId, err := ResolveBranchId(c, c.Query("branchId"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+
 	if err := c.QueryParser(&query); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "Invalid query parameters: " + err.Error(),
@@ -28,7 +33,7 @@ func SearchDoctorInfo(c *fiber.Ctx) error {
 		query.Limit = 100
 	}
 
-	doctors, total, err := dao.DB_SearchDoctorInfo(query)
+	doctors, total, err := dao.DB_SearchDoctorInfo(query, branchId)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Failed to search doctor info: " + err.Error(),

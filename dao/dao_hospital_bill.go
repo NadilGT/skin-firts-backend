@@ -19,17 +19,24 @@ func DB_CreateHospitalBill(bill *dto.HospitalBillModel) error {
 }
 
 // DB_ConfirmHospitalBill updates a hospital bill's confirm status to true.
-func DB_ConfirmHospitalBill(hospitalBillId string) error {
+func DB_ConfirmHospitalBill(hospitalBillId string, branchId string) error {
 	filter := bson.M{"hospitalBillId": hospitalBillId}
+	if branchId != "" {
+		filter["branchId"] = branchId
+	}
 	update := bson.M{"$set": bson.M{"confirm": true}}
 	_, err := dbConfigs.HospitalBillCollection.UpdateOne(context.Background(), filter, update)
 	return err
 }
 
 // DB_GetHospitalBill gets a hospital bill by its bill ID.
-func DB_GetHospitalBill(hospitalBillId string) (*dto.HospitalBillModel, error) {
+func DB_GetHospitalBill(hospitalBillId string, branchId string) (*dto.HospitalBillModel, error) {
 	var bill dto.HospitalBillModel
-	err := dbConfigs.HospitalBillCollection.FindOne(context.Background(), bson.M{"hospitalBillId": hospitalBillId}).Decode(&bill)
+	filter := bson.M{"hospitalBillId": hospitalBillId}
+	if branchId != "" {
+		filter["branchId"] = branchId
+	}
+	err := dbConfigs.HospitalBillCollection.FindOne(context.Background(), filter).Decode(&bill)
 	if err != nil {
 		return nil, err
 	}
