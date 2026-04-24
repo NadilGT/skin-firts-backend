@@ -16,10 +16,10 @@ func FindAllDoctors(c *fiber.Ctx) error {
 }
 
 func GetDoctorsByFocus(c *fiber.Ctx) error {
-	focus := c.Query("focus")
-	if focus == "" {
+	focusId := c.Query("focusId")
+	if focusId == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Query parameter 'focus' is required",
+			"error": "Query parameter 'focusId' is required",
 		})
 	}
 
@@ -28,7 +28,7 @@ func GetDoctorsByFocus(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 
-	doctors, err := dao.DB_FindDoctorsByFocus(focus, branchId)
+	doctors, err := dao.DB_FindDoctorsByFocus(focusId, branchId)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Failed to fetch doctors by focus",

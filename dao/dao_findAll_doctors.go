@@ -25,10 +25,10 @@ func DB_FindAllDoctors() (*[]dto.DoctorInfoModel, error) {
 	return &doctors, nil
 }
 
-func DB_FindDoctorsByFocus(focus string, branchId string) (*[]dto.DoctorInfoModel, error) {
+func DB_FindDoctorsByFocus(focusId string, branchId string) (*[]dto.DoctorInfoModel, error) {
 	var doctors []dto.DoctorInfoModel
 
-	filter := bson.M{"focus": focus}
+	filter := bson.M{"focus_id": focusId}
 	if branchId != "" {
 		filter["branchIds"] = branchId
 	}

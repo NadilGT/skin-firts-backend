@@ -7,6 +7,7 @@ type DoctorInfoModel struct {
 	Name       string   `json:"name" bson:"name"`
 	Experience int      `json:"experience" bson:"experience"`
 	Focus      string   `json:"focus" bson:"focus"`
+	FocusId    string   `json:"focus_id" bson:"focus_id"`
 	Special    string   `json:"special" bson:"special"`
 	Starts     int      `json:"starts" bson:"starts"`
 	Messages   int      `json:"messages" bson:"messages"`
@@ -24,11 +25,12 @@ type DoctorInfoModel struct {
 
 // SearchDoctorInfoQuery represents the query parameters for searching doctor info.
 type SearchDoctorInfoQuery struct {
-	Query  string `json:"query" query:"query"`
-	Focus  string `json:"focus" query:"focus"`
+	Query   string `json:"query" query:"query"`
+	Focus   string `json:"focus" query:"focus"`
+	FocusId string `json:"focusId" query:"focusId"`
 	Special string `json:"special" query:"special"`
-	Page   int    `json:"page" query:"page"`
-	Limit  int    `json:"limit" query:"limit"`
+	Page    int    `json:"page" query:"page"`
+	Limit   int    `json:"limit" query:"limit"`
 }
 
 // DoctorInfoSearchResponse represents the paginated response for a doctor info search.

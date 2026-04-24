@@ -20,7 +20,9 @@ func DB_SearchDoctorInfo(query dto.SearchDoctorInfoQuery) ([]dto.DoctorInfoModel
 		filter["name"] = bson.M{"$regex": query.Query, "$options": "i"}
 	}
 	
-	if query.Focus != "" {
+	if query.FocusId != "" {
+		filter["focus_id"] = query.FocusId
+	} else if query.Focus != "" {
 		filter["focus"] = bson.M{"$regex": query.Focus, "$options": "i"}
 	}
 	
