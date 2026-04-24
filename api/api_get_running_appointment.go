@@ -28,7 +28,12 @@ func GetRunningAppointmentNumber(c *fiber.Ctx) error {
 		})
 	}
 
-	runningNum, err := dao.DB_GetRunningAppointment(doctorID, date)
+	branchId, err := ResolveBranchId(c, c.Query("branchId"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	runningNum, err := dao.DB_GetRunningAppointment(doctorID, date, branchId)
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 			"error": "No running appointment found for this doctor",

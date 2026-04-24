@@ -24,7 +24,7 @@ func DB_UpdateAppointmentStatus(id string, status string) error {
 	return err
 }
 
-func DB_GetRunningAppointment(doctorID string, date time.Time) (int, error) {
+func DB_GetRunningAppointment(doctorID string, date time.Time, branchId string) (int, error) {
 	collection := dbConfigs.AppointmentCollection
 
 	startOfDay := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, date.Location())
@@ -32,6 +32,7 @@ func DB_GetRunningAppointment(doctorID string, date time.Time) (int, error) {
 
 	filter := bson.M{
 		"doctorId": doctorID,
+		"branchId": branchId,
 		"status":   "running",
 		"appointmentDate": bson.M{
 			"$gte": startOfDay,
