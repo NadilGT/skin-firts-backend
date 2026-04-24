@@ -46,7 +46,6 @@ func CreateStockAdjustment(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
 		"message": "Adjustment created (PENDING)", 
 		"data": r,
-		"effectiveBranchId": r.BranchId,
 	})
 }
 
@@ -56,6 +55,12 @@ func GetStockAdjustments(c *fiber.Ctx) error {
 	if err := c.QueryParser(&query); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid query"})
 	}
+
+	branchId, err := ResolveBranchId(c, query.BranchId)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+	query.BranchId = branchId
 
 	records, total, err := dao.DB_SearchStockAdjustments(query)
 	if err != nil {

@@ -132,7 +132,6 @@ func CreatePurchaseOrder(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
 		"message": "Purchase order created successfully", 
 		"data": po,
-		"effectiveBranchId": po.BranchId,
 	})
 }
 
@@ -141,6 +140,13 @@ func GetPurchaseOrders(c *fiber.Ctx) error {
 	if err := c.QueryParser(&query); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid query"})
 	}
+
+	branchId, err := ResolveBranchId(c, query.BranchId)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+	query.BranchId = branchId
+
 	if query.Page == 0 {
 		query.Page = 1
 	}
@@ -226,7 +232,6 @@ func CreateGRN(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
 		"message": "GRN created and stock updated successfully",
 		"data":    grn,
-		"effectiveBranchId": grn.BranchId,
 	})
 }
 
@@ -235,6 +240,13 @@ func GetGRNs(c *fiber.Ctx) error {
 	if err := c.QueryParser(&query); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid query"})
 	}
+
+	branchId, err := ResolveBranchId(c, query.BranchId)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+	query.BranchId = branchId
+
 	if query.Page == 0 {
 		query.Page = 1
 	}

@@ -256,11 +256,9 @@ func GetAvailableBatchesFEFO(c *fiber.Ctx) error {
 		})
 	}
 
-	branchId := c.Query("branchId")
-	if branchId == "" {
-		if val, ok := c.Locals("effectiveBranchId").(string); ok {
-			branchId = val
-		}
+	branchId, err := ResolveBranchId(c, c.Query("branchId"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 
 	batches, err := dao.DB_GetAvailableBatchesFEFO(id, branchId)
@@ -283,11 +281,9 @@ func GetActiveStockByMedicineID(c *fiber.Ctx) error {
 		})
 	}
 
-	branchId := c.Query("branchId")
-	if branchId == "" {
-		if val, ok := c.Locals("effectiveBranchId").(string); ok {
-			branchId = val
-		}
+	branchId, err := ResolveBranchId(c, c.Query("branchId"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 
 	totalStock, err := dao.DB_GetActiveStockByMedicineID(id, branchId)
@@ -323,7 +319,10 @@ func DeductStockFEFO(c *fiber.Ctx) error {
 		})
 	}
 
-	branchId, _ := c.Locals("effectiveBranchId").(string)
+	branchId, err := ResolveBranchId(c, "") // DeductStockFEFO usually relies on token branch
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
 	billItems, err := dao.DB_DeductStockFEFO(req.MedicineID, req.Quantity, "", branchId)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -440,7 +439,6 @@ func CreateBill(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
 		"message": "Bill created successfully (Pending Confirmation)",
 		"data":    bill,
-		"effectiveBranchId": bill.BranchId,
 	})
 }
 
