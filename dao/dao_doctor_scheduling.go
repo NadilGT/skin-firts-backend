@@ -84,8 +84,11 @@ func DB_CreateDoctorAvailability(availability dto.DoctorAvailability) (string, e
 	return result.InsertedID.(primitive.ObjectID).Hex(), nil
 }
 
-func DB_UpdateDoctorAvailability(id string, availability dto.DoctorAvailability) error {
+func DB_UpdateDoctorAvailability(id string, branchId string, availability dto.DoctorAvailability) error {
 	filter := bson.M{"doctorAvailabilityId": id}
+	if branchId != "" {
+		filter["branchId"] = branchId
+	}
 	update := bson.M{
 		"$set": bson.M{
 			"doctorId":           availability.DoctorID,
@@ -107,8 +110,12 @@ func DB_UpdateDoctorAvailability(id string, availability dto.DoctorAvailability)
 	return nil
 }
 
-func DB_DeleteDoctorAvailability(id string) error {
-	result, err := dbConfigs.DoctorAvailabilityCollection.DeleteOne(context.Background(), bson.M{"doctorAvailabilityId": id})
+func DB_DeleteDoctorAvailability(id string, branchId string) error {
+	filter := bson.M{"doctorAvailabilityId": id}
+	if branchId != "" {
+		filter["branchId"] = branchId
+	}
+	result, err := dbConfigs.DoctorAvailabilityCollection.DeleteOne(context.Background(), filter)
 	if err != nil {
 		return err
 	}

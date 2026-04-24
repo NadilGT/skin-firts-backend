@@ -17,12 +17,9 @@ func CreateDoctorWeeklySchedule(c *fiber.Ctx) error {
 	}
 
 	// Resolve branchId
-	branchId := GetBranchId(c)
-	if branchId == "" && schedule.BranchId != "" {
-		branchId = schedule.BranchId // fallback for super_admin
-	}
-	if branchId == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "branchId is required"})
+	branchId, err := ResolveBranchId(c, schedule.BranchId)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 	schedule.BranchId = branchId
 
@@ -100,12 +97,9 @@ func CreateDoctorAvailability(c *fiber.Ctx) error {
 	}
 
 	// Resolve branchId
-	branchId := GetBranchId(c)
-	if branchId == "" && availability.BranchId != "" {
-		branchId = availability.BranchId
-	}
-	if branchId == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "branchId is required"})
+	branchId, err := ResolveBranchId(c, availability.BranchId)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 	availability.BranchId = branchId
 
@@ -126,11 +120,16 @@ func CreateDoctorAvailability(c *fiber.Ctx) error {
 
 func UpdateDoctorAvailability(c *fiber.Ctx) error {
 	id := c.Query("doctorAvailabilityId")
+	branchId, err := ResolveBranchId(c, c.Query("branchId"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+
 	var availability dto.DoctorAvailability
 	if err := c.BodyParser(&availability); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
 	}
-	if err := dao.DB_UpdateDoctorAvailability(id, availability); err != nil {
+	if err := dao.DB_UpdateDoctorAvailability(id, branchId, availability); err != nil {
 		if err == mongo.ErrNoDocuments {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Availability record not found"})
 		}
@@ -141,7 +140,12 @@ func UpdateDoctorAvailability(c *fiber.Ctx) error {
 
 func DeleteDoctorAvailability(c *fiber.Ctx) error {
 	id := c.Query("doctorAvailabilityId")
-	if err := dao.DB_DeleteDoctorAvailability(id); err != nil {
+	branchId, err := ResolveBranchId(c, c.Query("branchId"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	if err := dao.DB_DeleteDoctorAvailability(id, branchId); err != nil {
 		if err == mongo.ErrNoDocuments {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Availability record not found"})
 		}
