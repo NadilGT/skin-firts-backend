@@ -30,8 +30,10 @@ func parsePagination(c *fiber.Ctx) (int, int) {
 // GET /findAll/appointments?page=1&limit=10
 func GetAllAppointments(c *fiber.Ctx) error {
 	page, limit := parsePagination(c)
-	// branchId is empty for super_admin (sees all), set for everyone else
-	branchId, _ := c.Locals("effectiveBranchId").(string)
+	branchId, err := ResolveBranchId(c, c.Query("branchId"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
 
 	appointments, total, err := dao.DB_FindAllAppointments(branchId, page, limit)
 	if err != nil {
@@ -65,7 +67,10 @@ func GetAppointmentsByDoctorID(c *fiber.Ctx) error {
 	}
 
 	page, limit := parsePagination(c)
-	branchId, _ := c.Locals("effectiveBranchId").(string)
+	branchId, err := ResolveBranchId(c, c.Query("branchId"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
 
 	appointments, total, err := dao.DB_FindAppointmentsByDoctorID(doctorID, branchId, page, limit)
 	if err != nil {
@@ -115,8 +120,12 @@ func GetAppointmentsByDoctorIDSortedByNumber(c *fiber.Ctx) error {
 	}
 
 	page, limit := parsePagination(c)
+	branchId, err := ResolveBranchId(c, c.Query("branchId"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
 
-	appointments, total, err := dao.DB_FindAppointmentsByDoctorIDSortedByNumber(doctorID, appointmentDate, page, limit)
+	appointments, total, err := dao.DB_FindAppointmentsByDoctorIDSortedByNumber(doctorID, appointmentDate, branchId, page, limit)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Failed to fetch appointments for this doctor",
@@ -209,8 +218,12 @@ func GetAppointmentsByDoctorDateStatus(c *fiber.Ctx) error {
 	}
 
 	page, limit := parsePagination(c)
+	branchId, err := ResolveBranchId(c, c.Query("branchId"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
 
-	appointments, total, err := dao.DB_FindAppointmentsByDoctorDateStatus(doctorID, appointmentDate, status, page, limit)
+	appointments, total, err := dao.DB_FindAppointmentsByDoctorDateStatus(doctorID, appointmentDate, status, branchId, page, limit)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Failed to fetch appointments for this doctor",

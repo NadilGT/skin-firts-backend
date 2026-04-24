@@ -39,15 +39,20 @@ func (h *AppointmentStatusHandler) UpdateAppointmentStatus(c *fiber.Ctx) error {
 		})
 	}
 
+	branchId, err := ResolveBranchId(c, c.Query("branchId"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+
 	// 1. Update status in DB
-	if err := dao.DB_UpdateAppointmentStatus(idParam, req.Status); err != nil {
+	if err := dao.DB_UpdateAppointmentStatus(idParam, req.Status, branchId); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Failed to update appointment status",
 		})
 	}
 
 	// 2. Fire-and-forget: send FCM notification to the patient
-	go h.notifyPatient(idParam, req.Status)
+	go h.notifyPatient(idParam, req.Status, branchId)
 
 	return c.JSON(fiber.Map{
 		"message":   "Appointment status updated successfully",
@@ -58,9 +63,9 @@ func (h *AppointmentStatusHandler) UpdateAppointmentStatus(c *fiber.Ctx) error {
 
 // notifyPatient fetches appointment + patient FCM token, saves the notification to
 // MongoDB, and fires the FCM push. Runs in a goroutine so it never delays the HTTP response.
-func (h *AppointmentStatusHandler) notifyPatient(appointmentID string, status string) {
+func (h *AppointmentStatusHandler) notifyPatient(appointmentID string, status string, branchId string) {
 	// Fetch the full appointment to get patientId and appointment details
-	appointment, err := dao.DB_GetAppointmentByAppointmentID(appointmentID)
+	appointment, err := dao.DB_GetAppointmentByAppointmentID(appointmentID, branchId)
 	if err != nil {
 		log.Printf("⚠️  Notify: could not fetch appointment %s: %v", appointmentID, err)
 		return

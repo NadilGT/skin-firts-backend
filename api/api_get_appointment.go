@@ -14,7 +14,12 @@ func GetAppointmentByID(c *fiber.Ctx) error {
 		})
 	}
 
-	appointment, err := dao.DB_GetAppointmentByAppointmentID(appointmentID)
+	branchId, err := ResolveBranchId(c, c.Query("branchId"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	appointment, err := dao.DB_GetAppointmentByAppointmentID(appointmentID, branchId)
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 			"error": "Appointment not found",

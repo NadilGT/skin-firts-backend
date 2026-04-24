@@ -136,7 +136,7 @@ func DB_FindAppointmentsByPatientID(patientID string, branchId string, page, lim
 }
 // DB_FindAppointmentsByDoctorIDSortedByNumber returns a paginated list of appointments
 // for a specific doctor on a specific date, sorted by appointmentNumber ascending (smallest → largest).
-func DB_FindAppointmentsByDoctorIDSortedByNumber(doctorID string, appointmentDate time.Time, page, limit int) ([]dto.AppointmentModel, int64, error) {
+func DB_FindAppointmentsByDoctorIDSortedByNumber(doctorID string, appointmentDate time.Time, branchId string, page, limit int) ([]dto.AppointmentModel, int64, error) {
 	ctx := context.Background()
 
 	// Define range for the entire day (Start of day to End of day)
@@ -149,6 +149,9 @@ func DB_FindAppointmentsByDoctorIDSortedByNumber(doctorID string, appointmentDat
 			"$gte": startOfDay,
 			"$lt":  endOfDay,
 		},
+	}
+	if branchId != "" {
+		filter["branchId"] = branchId
 	}
 
 	total, err := dbConfigs.AppointmentCollection.CountDocuments(ctx, filter)
@@ -186,7 +189,7 @@ func DB_FindAppointmentsByDoctorIDSortedByNumber(doctorID string, appointmentDat
 
 // DB_FindAppointmentsByDoctorDateStatus returns a paginated list of appointments
 // for a specific doctor on a specific date with a specific status, sorted by appointmentNumber ascending.
-func DB_FindAppointmentsByDoctorDateStatus(doctorID string, appointmentDate time.Time, status string, page, limit int) ([]dto.AppointmentModel, int64, error) {
+func DB_FindAppointmentsByDoctorDateStatus(doctorID string, appointmentDate time.Time, status string, branchId string, page, limit int) ([]dto.AppointmentModel, int64, error) {
 	ctx := context.Background()
 
 	// Define range for the entire day (Start of day to End of day)
@@ -200,6 +203,9 @@ func DB_FindAppointmentsByDoctorDateStatus(doctorID string, appointmentDate time
 			"$gte": startOfDay,
 			"$lt":  endOfDay,
 		},
+	}
+	if branchId != "" {
+		filter["branchId"] = branchId
 	}
 
 	total, err := dbConfigs.AppointmentCollection.CountDocuments(ctx, filter)

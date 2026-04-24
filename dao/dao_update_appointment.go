@@ -9,10 +9,13 @@ import (
 	"lawyerSL-Backend/dbConfigs"
 )
 
-func DB_UpdateAppointmentStatus(id string, status string) error {
+func DB_UpdateAppointmentStatus(id string, status string, branchId string) error {
 	collection := dbConfigs.AppointmentCollection
 
 	filter := bson.M{"appointmentId": id}
+	if branchId != "" {
+		filter["branchId"] = branchId
+	}
 	update := bson.M{
 		"$set": bson.M{
 			"status":    status,

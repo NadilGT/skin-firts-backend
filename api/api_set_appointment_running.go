@@ -16,7 +16,12 @@ func SetAppointmentRunning(c *fiber.Ctx) error {
 		})
 	}
 
-	if err := dao.DB_UpdateAppointmentStatus(idParam, "running"); err != nil {
+	branchId, err := ResolveBranchId(c, c.Query("branchId"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	if err := dao.DB_UpdateAppointmentStatus(idParam, "running", branchId); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Failed to set appointment status to running",
 		})
