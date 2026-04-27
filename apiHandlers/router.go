@@ -150,10 +150,6 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 	app.Get("/doctor-weekly-schedule/available-dates", api.GetDoctorAvailableDatesForWeek) // Publicly accessible
 
 	// Doctor Availability
-	app.Post("/doctor-availability", authMiddleware.ValidateToken, BranchMiddleware, api.CreateDoctorAvailability)
-	app.Put("/doctor-availability/doctorAvailabilityId", authMiddleware.ValidateToken, BranchMiddleware, api.UpdateDoctorAvailability)
-	app.Delete("/doctor-availability/doctorAvailabilityId", authMiddleware.ValidateToken, BranchMiddleware, api.DeleteDoctorAvailability)
-	app.Get("/doctor-availability", authMiddleware.ValidateToken, BranchMiddleware, api.GetAllDoctorAvailabilities)
 	app.Get("/doctor-availability/check", api.CheckDoctorAvailability) // Publicly accessible
 
 	// ========== REPORT ROUTES ==========

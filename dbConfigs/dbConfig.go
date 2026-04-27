@@ -22,7 +22,6 @@ var IdCounters *mongo.Collection
 var MedicineOrderCollection *mongo.Collection
 var FocusCollection *mongo.Collection
 var DoctorWeeklyScheduleCollection *mongo.Collection
-var DoctorAvailabilityCollection *mongo.Collection
 var BillCollection *mongo.Collection
 var HospitalBillCollection *mongo.Collection
 var NotificationCollection *mongo.Collection
@@ -78,7 +77,6 @@ func ConnectMongoDB(uri string) *mongo.Client {
 	AppointmentCollection = coreMedicalDb.Collection("appointments")
 	DoctorScheduleCollection = coreMedicalDb.Collection("doctor_schedules")
 	DoctorWeeklyScheduleCollection = coreMedicalDb.Collection("doctor_weekly_schedules")
-	DoctorAvailabilityCollection = coreMedicalDb.Collection("doctor_availabilities")
 	FocusCollection = coreMedicalDb.Collection("focus_categories")
 	ServiceCollection = coreMedicalDb.Collection("services")
 
