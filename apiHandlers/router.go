@@ -152,6 +152,18 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 	// Doctor Availability
 	app.Get("/doctor-availability/check", api.CheckDoctorAvailability) // Publicly accessible
 
+	// ========== DOCTOR DAILY CAPACITY ROUTES (admin-only) ==========
+	// GET  /doctor-daily-capacity         → list all (filter by doctorId, branchId, fromDate, toDate)
+	// GET  /doctor-daily-capacity/single  → single record by doctorId+branchId+date
+	// POST /doctor-daily-capacity         → manually create a record
+	// PUT  /doctor-daily-capacity         → update max/booked by doctorId+branchId+date
+	// DELETE /doctor-daily-capacity       → delete record (date becomes unlimited)
+	app.Get("/doctor-daily-capacity", authMiddleware.ValidateToken, BranchMiddleware, api.GetAllDailyCapacities)
+	app.Get("/doctor-daily-capacity/single", authMiddleware.ValidateToken, BranchMiddleware, api.GetSingleDailyCapacity)
+	app.Post("/doctor-daily-capacity", authMiddleware.ValidateToken, BranchMiddleware, RequiresRole("admin"), api.CreateDailyCapacity)
+	app.Put("/doctor-daily-capacity", authMiddleware.ValidateToken, BranchMiddleware, RequiresRole("admin"), api.UpdateDailyCapacity)
+	app.Delete("/doctor-daily-capacity", authMiddleware.ValidateToken, BranchMiddleware, RequiresRole("admin"), api.DeleteDailyCapacity)
+
 	// ========== REPORT ROUTES ==========
 	app.Post("/api/reports/upload", reportHandler.UploadReport)
 	app.Get("/api/reports", reportHandler.GetReportsByPatientID)

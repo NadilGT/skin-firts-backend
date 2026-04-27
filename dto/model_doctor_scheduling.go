@@ -29,9 +29,10 @@ type CheckAvailabilityResponse struct {
 // DoctorDailyCapacity tracks how many patients are booked vs the max
 // for a specific doctor + branch + date. Lazily initialized on first booking.
 type DoctorDailyCapacity struct {
-	DoctorID string `json:"doctorId" bson:"doctorId"`
-	BranchId string `json:"branchId" bson:"branchId"`
-	Date     string `json:"date" bson:"date"` // UTC date "2026-04-29"
-	Booked   int    `json:"booked" bson:"booked"`
-	Max      int    `json:"max" bson:"max"`
+	DoctorDailyCapacityId string `json:"doctorDailyCapacityId" bson:"doctorDailyCapacityId"`
+	DoctorID              string `json:"doctorId" bson:"doctorId"`
+	BranchId              string `json:"branchId" bson:"branchId"`
+	Date                  string `json:"date" bson:"date"` // UTC date "2026-04-29"
+	Booked                int    `json:"booked" bson:"booked"`
+	Max                   int    `json:"max" bson:"max"`
 }
