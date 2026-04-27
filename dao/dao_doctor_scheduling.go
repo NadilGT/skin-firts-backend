@@ -152,7 +152,7 @@ func DB_CheckDoctorAvailabilityOnDate(doctorID string, branchId string, date tim
 
 	// 1. Check specific availability override
 	var availability dto.DoctorAvailability
-	err := dbConfigs.DoctorAvailabilityCollection.FindOne(context.Background(), bson.M{
+	err := dbConfigs.DoctorWeeklyScheduleCollection.FindOne(context.Background(), bson.M{
 		"doctorId": doctorID,
 		"branchId": branchId,
 		"date":     dateStr,
