@@ -38,7 +38,11 @@ type CreateAppointmentRequest struct {
 	AppointmentDate   string `json:"appointmentDate" bson:"appointmentDate" validate:"required"` // Format: 2025-11-09
 	Notes             string `json:"notes,omitempty" bson:"notes,omitempty"`
 	BranchId          string `json:"branchId,omitempty"` // auto-set from JWT; client may omit
+	// ForceBook: admin-only flag to bypass the daily capacity limit.
+	// Only respected when the JWT role is "admin" or "super_admin".
+	ForceBook bool `json:"forceBook,omitempty"`
 }
+
 
 type UpdateAppointmentStatusRequest struct {
 	Status string `json:"status" validate:"required,oneof=confirmed pending completed cancelled running"`

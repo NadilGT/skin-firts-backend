@@ -11,8 +11,6 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-
-
 var dateFormats = []string{
 	time.RFC3339Nano,
 	time.RFC3339,       // 2025-11-18T10:30:00Z
@@ -102,7 +100,7 @@ func CreateAppointment(c *fiber.Ctx) error {
 		})
 	}
 
-	// ── 6. Check doctor availability/schedule ───────────────────────────────────
+	// ── 6. Check doctor weekly schedule ─────────────────────────────────────────
 	isAvailable, reason, err := dao.DB_CheckDoctorAvailabilityOnDate(req.DoctorID, branchId, appointmentDate)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -116,14 +114,37 @@ func CreateAppointment(c *fiber.Ctx) error {
 		})
 	}
 
+	// ── 7. Lazy-init capacity document (upsert, safe for concurrency) ────────────
+	if err := dao.DB_EnsureCapacity(req.DoctorID, branchId, appointmentDate); err != nil {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	// ── 8. Admin force-book flag ─────────────────────────────────────────────────
+	// If the JWT role is "admin" or "super_admin" and the request body contains
+	// "forceBook: true", the capacity limit can be bypassed.
+	role, _ := c.Locals("role").(string)
+	forceBook := req.ForceBook && (role == "admin" || role == "super_admin")
+
+	// ── 9. Atomically increment booked counter (overbooking guard) ───────────────
+	if err := dao.DB_BookAppointmentCapacity(req.DoctorID, branchId, appointmentDate, forceBook); err != nil {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	// ── 10. Generate appointment number ─────────────────────────────────────────
 	nextNum, err := dao.DB_GetNextAppointmentNumber(req.DoctorID, branchId, appointmentDate)
 	if err != nil {
+		// Roll back the capacity slot we just claimed.
+		_ = dao.DB_ReleaseAppointmentCapacity(req.DoctorID, branchId, appointmentDate)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Failed to generate appointment number",
 		})
 	}
 
-	// ── 7. Build and persist the appointment ────────────────────────────────────
+	// ── 11. Build and persist the appointment ───────────────────────────────────
 	appointment := dto.AppointmentModel{
 		AppointmentID:     req.AppointmentID,
 		AppointmentNumber: nextNum,
@@ -141,6 +162,8 @@ func CreateAppointment(c *fiber.Ctx) error {
 	}
 
 	if err := dao.DB_CreateAppointment(appointment); err != nil {
+		// Roll back the capacity slot we just claimed.
+		_ = dao.DB_ReleaseAppointmentCapacity(req.DoctorID, branchId, appointmentDate)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Failed to create appointment",
 		})
@@ -152,4 +175,5 @@ func CreateAppointment(c *fiber.Ctx) error {
 		"next_appointment_number": nextNum,
 	})
 }
+
 

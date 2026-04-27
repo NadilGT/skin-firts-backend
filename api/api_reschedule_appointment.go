@@ -72,9 +72,25 @@ func (h *AppointmentStatusHandler) RescheduleAppointment(c *fiber.Ctx) error {
 		})
 	}
 
+	// Lazy-init capacity for the new date
+	if err := dao.DB_EnsureCapacity(existingAppointment.DoctorID, existingAppointment.BranchId, newDate); err != nil {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	// Atomically claim a slot on the new date (no force-book for reschedules)
+	if err := dao.DB_BookAppointmentCapacity(existingAppointment.DoctorID, existingAppointment.BranchId, newDate, false); err != nil {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
 	// Get the next appointment number for the rescheduled date
 	nextNum, err := dao.DB_GetNextAppointmentNumber(existingAppointment.DoctorID, existingAppointment.BranchId, newDate)
 	if err != nil {
+		// Roll back the new-date slot
+		_ = dao.DB_ReleaseAppointmentCapacity(existingAppointment.DoctorID, existingAppointment.BranchId, newDate)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Failed to generate appointment number",
 		})
@@ -82,10 +98,15 @@ func (h *AppointmentStatusHandler) RescheduleAppointment(c *fiber.Ctx) error {
 
 	// Update the appointment
 	if err := dao.DB_RescheduleAppointment(appointmentID, newDate, nextNum); err != nil {
+		// Roll back the new-date slot
+		_ = dao.DB_ReleaseAppointmentCapacity(existingAppointment.DoctorID, existingAppointment.BranchId, newDate)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Failed to reschedule appointment",
 		})
 	}
+
+	// Release the slot on the old date now that reschedule succeeded
+	_ = dao.DB_ReleaseAppointmentCapacity(existingAppointment.DoctorID, existingAppointment.BranchId, existingAppointment.AppointmentDate)
 
 	// Send FCM notification asynchronously
 	go h.notifyPatientRescheduled(*existingAppointment, newDate, nextNum)
