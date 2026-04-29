@@ -227,7 +227,7 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 	app.Get("/payments/pending", authMiddleware.ValidateToken, BranchMiddleware, api.GetPendingPayments)
 
 	// ========== REPORTS & ANALYTICS (branch-scoped) ==========
-	app.Get("/reports/top-selling", authMiddleware.ValidateToken, BranchMiddleware, api.GetTopSellingMedicines)
+	app.Get("/reports/top-selling", authMiddleware.ValidateToken, BranchMiddleware, api.GetTopSellingMedicinesPDF)
 	app.Get("/reports/sales", authMiddleware.ValidateToken, BranchMiddleware, api.GetSalesReport)
 	app.Get("/reports/profit-margin", authMiddleware.ValidateToken, BranchMiddleware, api.GetProfitMarginReport)
 	app.Get("/reports/expiry", authMiddleware.ValidateToken, BranchMiddleware, api.GetExpiryReport)

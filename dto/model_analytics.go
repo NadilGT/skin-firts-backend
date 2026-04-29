@@ -56,8 +56,8 @@ type StockReportItem struct {
 
 type AnalyticsQuery struct {
 	BranchId string `json:"branchId" query:"branchId"`
-	From     string `json:"from" query:"from"` // YYYY-MM-DD
-	To       string `json:"to" query:"to"`
+	From     string `json:"from" query:"fromDate"` // YYYY-MM-DD
+	To       string `json:"to" query:"toDate"`
 	Period   string `json:"period" query:"period"` // "daily" | "monthly"
 	Limit    int    `json:"limit" query:"limit"`
 	Days     int    `json:"days" query:"days"` // for expiry alerts
