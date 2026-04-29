@@ -267,15 +267,12 @@ func DB_GetDailyCapacityById(capacityId string) (*dto.DoctorDailyCapacity, error
 	return &cap, nil
 }
 
-// DB_DeleteDailyCapacity removes a capacity record entirely.  After deletion
+// DB_DeleteDailyCapacity removes a capacity record entirely. After deletion
 // the doctor/date will be treated as unlimited until a new record is created.
-func DB_DeleteDailyCapacity(doctorID, branchId, dateStr string) error {
-	dateStr = normalizeDate(mustParseDate(dateStr))
-
+func DB_DeleteDailyCapacity(capacityId, branchId string) error {
 	result, err := dbConfigs.DoctorDailyCapacityCollection.DeleteOne(context.Background(), bson.M{
-		"doctorId": doctorID,
-		"branchId": branchId,
-		"date":     dateStr,
+		"doctorDailyCapacityId": capacityId,
+		"branchId":              branchId,
 	})
 	if err != nil {
 		return err

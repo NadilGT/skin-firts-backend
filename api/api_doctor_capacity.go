@@ -123,13 +123,12 @@ func UpdateDailyCapacity(c *fiber.Ctx) error {
 
 
 // ─── DELETE /doctor-daily-capacity ───────────────────────────────────────────
-// Query params: doctorId (required), branchId (required), date (required)
+// Query params: doctorDailyCapacityId (required), branchId (optional/resolved)
 // Removes the capacity record — the date becomes unlimited after deletion.
 func DeleteDailyCapacity(c *fiber.Ctx) error {
-	doctorID := c.Query("doctorId")
-	dateStr := c.Query("date")
-	if doctorID == "" || dateStr == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "doctorId and date are required"})
+	capacityId := c.Query("doctorDailyCapacityId")
+	if capacityId == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "doctorDailyCapacityId is required"})
 	}
 
 	branchId, err := ResolveBranchId(c, c.Query("branchId"))
@@ -137,7 +136,7 @@ func DeleteDailyCapacity(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 
-	if err := dao.DB_DeleteDailyCapacity(doctorID, branchId, dateStr); err != nil {
+	if err := dao.DB_DeleteDailyCapacity(capacityId, branchId); err != nil {
 		if err == mongo.ErrNoDocuments {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Capacity record not found"})
 		}
