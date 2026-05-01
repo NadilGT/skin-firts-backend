@@ -8,11 +8,23 @@ import (
 )
 
 func FindAllDoctors(c *fiber.Ctx) error {
-	returnValue, err := dao.DB_FindAllDoctors()
+	branchId, err := ResolveBranchId(c, c.Query("branchId"))
 	if err != nil {
-		return err
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
-	return c.Status(fiber.StatusAccepted).JSON(returnValue)
+
+	returnValue, err := dao.DB_FindAllDoctors(branchId)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to fetch doctors",
+		})
+	}
+
+	if returnValue == nil {
+		returnValue = &[]dto.DoctorInfoModel{}
+	}
+
+	return c.Status(fiber.StatusOK).JSON(returnValue)
 }
 
 func GetDoctorsByFocus(c *fiber.Ctx) error {

@@ -28,6 +28,7 @@ func DB_UpdateDoctorWeeklySchedule(id string, branchId string, schedule dto.Doct
 			"daysOfWeek":       schedule.DaysOfWeek,
 			"defaultStartTime": schedule.DefaultStartTime,
 			"isActive":         schedule.IsActive,
+			"maxPatients":      schedule.MaxPatients,
 		},
 	}
 	result, err := dbConfigs.DoctorWeeklyScheduleCollection.UpdateOne(context.Background(), filter, update)

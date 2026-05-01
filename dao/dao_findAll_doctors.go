@@ -8,13 +8,20 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 )
 
-func DB_FindAllDoctors() (*[]dto.DoctorInfoModel, error) {
+func DB_FindAllDoctors(branchId string) (*[]dto.DoctorInfoModel, error) {
 	var doctors []dto.DoctorInfoModel
 
-	results, err := dbConfigs.DoctorInfoCollection.Find(context.Background(), bson.D{})
+	filter := bson.M{}
+	if branchId != "" {
+		filter["branchIds"] = branchId
+	}
+
+	results, err := dbConfigs.DoctorInfoCollection.Find(context.Background(), filter)
 	if err != nil {
 		return nil, err
 	}
+	defer results.Close(context.Background())
+
 	for results.Next(context.Background()) {
 		var doctor dto.DoctorInfoModel
 		if err := results.Decode(&doctor); err != nil {
