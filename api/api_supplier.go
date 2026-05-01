@@ -166,6 +166,33 @@ func GetPurchaseOrders(c *fiber.Ctx) error {
 	})
 }
 
+func GetPurchaseOrdersByStatus(c *fiber.Ctx) error {
+	branchIdInput := c.Query("branchId")
+	status := c.Query("status")
+
+	branchId, err := ResolveBranchId(c, branchIdInput)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	query := dto.SearchPOQuery{
+		BranchId: branchId,
+		Status:   status,
+		Page:     1,
+		Limit:    1000, // Large limit for filtered list
+	}
+
+	pos, total, err := dao.DB_SearchPurchaseOrders(query)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch purchase orders"})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"data":  pos,
+		"total": total,
+	})
+}
+
 func GetPurchaseOrderByID(c *fiber.Ctx) error {
 	id := c.Query("id")
 	if id == "" {

@@ -197,6 +197,7 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 	// ========== PURCHASE ORDERS (branch-scoped) ==========
 	app.Post("/purchase-orders", authMiddleware.ValidateToken, BranchMiddleware, api.CreatePurchaseOrder)
 	app.Get("/purchase-orders", authMiddleware.ValidateToken, BranchMiddleware, api.GetPurchaseOrders)
+	app.Get("/purchase-orders/filter", authMiddleware.ValidateToken, BranchMiddleware, api.GetPurchaseOrdersByStatus)
 	app.Get("/purchase-orders/id", authMiddleware.ValidateToken, BranchMiddleware, api.GetPurchaseOrderByID)
 	app.Patch("/purchase-orders/id/status", authMiddleware.ValidateToken, BranchMiddleware, api.UpdatePurchaseOrderStatus)
 
