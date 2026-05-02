@@ -166,3 +166,44 @@ func ApproveStockTransfer(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Stock transfer approved — can now be completed"})
 }
 
+// ──────────────────────────────────────────────
+//  Branch Stock
+// ──────────────────────────────────────────────
+
+// GetBranchStocks returns paginated branch stock records.
+// GET /inventory/stocks?branchId=...&medicineId=...&batchId=...&page=...&limit=...
+func GetBranchStocks(c *fiber.Ctx) error {
+	var query dto.SearchBranchStockQuery
+	if err := c.QueryParser(&query); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid query parameters"})
+	}
+
+	branchId, err := ResolveBranchId(c, query.BranchId)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+	query.BranchId = branchId
+
+	if query.Page <= 0 {
+		query.Page = 1
+	}
+	if query.Limit <= 0 {
+		query.Limit = 20
+	}
+
+	stocks, total, err := dao.DB_SearchBranchStocks(query)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch branch stocks: " + err.Error()})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"data": stocks,
+		"pagination": fiber.Map{
+			"page":       query.Page,
+			"limit":      query.Limit,
+			"total":      total,
+			"totalPages": (total + int64(query.Limit) - 1) / int64(query.Limit),
+		},
+	})
+}
+

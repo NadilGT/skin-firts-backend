@@ -210,6 +210,7 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 	app.Get("/inventory/stock-valuation", authMiddleware.ValidateToken, BranchMiddleware, api.GetStockValuation)
 	app.Get("/inventory/expiry-alerts", authMiddleware.ValidateToken, BranchMiddleware, api.GetExpiryAlerts)
 	app.Get("/inventory/stock-report", authMiddleware.ValidateToken, BranchMiddleware, api.GetInventoryStockReport)
+	app.Get("/inventory/stocks", authMiddleware.ValidateToken, BranchMiddleware, api.GetBranchStocks)
 
 	// ========== STOCK TRANSFERS (branch-scoped) ==========
 	app.Post("/stock-transfers", authMiddleware.ValidateToken, BranchMiddleware, api.CreateStockTransfer)

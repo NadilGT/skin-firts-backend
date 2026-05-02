@@ -638,3 +638,48 @@ func DB_GetStockReport(branchId string) ([]dto.StockReportItem, error) {
 
 	return report, nil
 }
+
+// DB_SearchBranchStocks returns paginated branch stock records with optional filters.
+func DB_SearchBranchStocks(query dto.SearchBranchStockQuery) ([]dto.BranchStock, int64, error) {
+	ctx := context.Background()
+	filter := bson.M{}
+
+	if query.BranchId != "" {
+		filter["branchId"] = query.BranchId
+	}
+	if query.MedicineId != "" {
+		filter["medicineId"] = query.MedicineId
+	}
+	if query.BatchId != "" {
+		filter["batchId"] = query.BatchId
+	}
+
+	total, err := dbConfigs.BranchStockCollection.CountDocuments(ctx, filter)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	if query.Page <= 0 {
+		query.Page = 1
+	}
+	if query.Limit <= 0 {
+		query.Limit = 20
+	}
+
+	findOpts := options.Find().
+		SetSkip(int64((query.Page - 1) * query.Limit)).
+		SetLimit(int64(query.Limit)).
+		SetSort(bson.D{{Key: "updatedAt", Value: -1}})
+
+	cursor, err := dbConfigs.BranchStockCollection.Find(ctx, filter, findOpts)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer cursor.Close(ctx)
+
+	var stocks []dto.BranchStock
+	if err = cursor.All(ctx, &stocks); err != nil {
+		return nil, 0, err
+	}
+	return stocks, total, nil
+}

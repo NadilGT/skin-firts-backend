@@ -167,3 +167,11 @@ type SearchBillQuery struct {
 	Page          int    `json:"page" query:"page"`
 	Limit         int    `json:"limit" query:"limit"`
 }
+
+type SearchBranchStockQuery struct {
+	BranchId   string `json:"branchId" query:"branchId"`
+	MedicineId string `json:"medicineId" query:"medicineId"`
+	BatchId    string `json:"batchId" query:"batchId"`
+	Page       int    `json:"page" query:"page"`
+	Limit      int    `json:"limit" query:"limit"`
+}
