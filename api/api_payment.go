@@ -22,6 +22,19 @@ func GetPharmacyBills(c *fiber.Ctx) error {
 	if query.Limit == 0 {
 		query.Limit = 20
 	}
+	// Support single-day `date` shortcut: ?date=YYYY-MM-DD sets both from/to
+	if d := c.Query("date"); d != "" {
+		query.From = d
+		query.To = d
+	}
+
+	// Enforce branch resolution / authorization
+	branchId, err := ResolveBranchId(c, query.BranchId)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+	query.BranchId = branchId
+
 	bills, total, err := dao.DB_SearchPharmacyBills(query)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch bills: " + err.Error()})
