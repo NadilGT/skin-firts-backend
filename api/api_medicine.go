@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
@@ -383,21 +384,10 @@ func CreateBill(c *fiber.Ctx) error {
 		netTotal = 0
 	}
 
-	// Payment calculations
-	paidAmount := req.PaidAmount
-	if paidAmount < 0 {
-		paidAmount = 0
-	}
-	dueAmount := netTotal - paidAmount
-	if dueAmount < 0 {
-		dueAmount = 0
-	}
+	// Initial payment state for PENDING bill
+	paidAmount := 0.0
+	dueAmount := netTotal
 	paymentStatus := "PENDING"
-	if paidAmount >= netTotal {
-		paymentStatus = "PAID"
-	} else if paidAmount > 0 {
-		paymentStatus = "PARTIAL"
-	}
 
 	billId, err := dao.GenerateId(context.Background(), "bills", "BIL")
 	if err != nil {
@@ -418,7 +408,7 @@ func CreateBill(c *fiber.Ctx) error {
 		PaidAmount:         paidAmount,
 		DueAmount:          dueAmount,
 		PaymentStatus:      paymentStatus,
-		PaymentMethod:      req.PaymentMethod,
+		PaymentMethod:      "", // Set during confirmation
 		CustomerName:       req.CustomerName,
 		CustomerPhone:      req.CustomerPhone,
 		BranchId:           req.BranchId,
@@ -475,6 +465,11 @@ func ConfirmBill(c *fiber.Ctx) error {
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
+	
+	var req dto.UpdateBillPaymentRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body: " + err.Error()})
+	}
 
 	bill, err := dao.DB_GetBillByBillId(billId, branchId)
 	if err != nil {
@@ -509,15 +504,53 @@ func ConfirmBill(c *fiber.Ctx) error {
 		_ = dao.DB_WriteSaleMovement(item, billId, bill.BranchId)
 	}
 
-	// All stock deducted successfully, mark bill as confirmed
-	err = dao.DB_UpdateBillStatus(billId, "CONFIRMED", branchId)
+	// Calculate payment status
+	paidAmount := req.PaidAmount
+	if paidAmount < 0 {
+		paidAmount = 0
+	}
+	dueAmount := bill.NetTotal - paidAmount
+	if dueAmount < 0 {
+		dueAmount = 0
+	}
+	paymentStatus := "PENDING"
+	if paidAmount >= bill.NetTotal {
+		paymentStatus = "PAID"
+	} else if paidAmount > 0 {
+		paymentStatus = "PARTIAL"
+	}
+
+	updates := bson.M{
+		"status":        "CONFIRMED",
+		"paidAmount":    paidAmount,
+		"dueAmount":     dueAmount,
+		"paymentStatus": paymentStatus,
+	}
+	
+	if req.PaymentMethod != "" {
+		updates["paymentMethod"] = req.PaymentMethod
+	}
+	if req.Notes != "" {
+		updates["notes"] = req.Notes
+	}
+
+	err = dao.DB_UpdateBillConfirmDetails(billId, branchId, updates)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to update bill status, but stock was deducted",
+			"error": "Failed to update bill details, but stock was deducted",
 		})
 	}
 
 	bill.Status = "CONFIRMED"
+	bill.PaidAmount = paidAmount
+	bill.DueAmount = dueAmount
+	bill.PaymentStatus = paymentStatus
+	if req.PaymentMethod != "" {
+		bill.PaymentMethod = req.PaymentMethod
+	}
+	if req.Notes != "" {
+		bill.Notes = req.Notes
+	}
 	bill.UpdatedAt = time.Now()
 
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{

@@ -638,6 +638,23 @@ func DB_UpdateBillStatus(billId string, status string, branchId string) error {
 	return err
 }
 
+func DB_UpdateBillConfirmDetails(billId string, branchId string, updates bson.M) error {
+	filter := bson.M{"billId": billId}
+	if branchId != "" {
+		filter["branchId"] = branchId
+	}
+	
+	// Ensure updatedAt is set
+	updates["updatedAt"] = time.Now()
+	
+	updateDoc := bson.M{
+		"$set": updates,
+	}
+	
+	_, err := dbConfigs.BillCollection.UpdateOne(context.Background(), filter, updateDoc)
+	return err
+}
+
 // DB_RevertStockDeduction re-adds quantities to BranchStock for a failed/cancelled bill.
 func DB_RevertStockDeduction(billItems []dto.BillItem) error {
 	for _, item := range billItems {
