@@ -20,10 +20,14 @@ func DB_CreateSupplierBill(bill dto.SupplierBillModel) error {
 	return err
 }
 
-// DB_GetSupplierBillByID fetches a supplier bill by its string billId.
-func DB_GetSupplierBillByID(billId string) (*dto.SupplierBillModel, error) {
+// DB_GetSupplierBillByID fetches a supplier bill by its string billId and branchId.
+func DB_GetSupplierBillByID(billId string, branchId string) (*dto.SupplierBillModel, error) {
 	var bill dto.SupplierBillModel
-	err := dbConfigs.SupplierBillCollection.FindOne(context.Background(), bson.M{"billId": billId}).Decode(&bill)
+	filter := bson.M{"billId": billId}
+	if branchId != "" {
+		filter["branchId"] = branchId
+	}
+	err := dbConfigs.SupplierBillCollection.FindOne(context.Background(), filter).Decode(&bill)
 	if err != nil {
 		return nil, err
 	}
@@ -99,11 +103,11 @@ func DB_SearchSupplierBills(query dto.SearchSupplierBillQuery) ([]dto.SupplierBi
 
 // DB_UpdateSupplierBillPayment records a payment against a supplier bill and
 // recalculates dueAmount and paymentStatus accordingly.
-func DB_UpdateSupplierBillPayment(billId string, req dto.UpdateSupplierBillPaymentRequest) error {
+func DB_UpdateSupplierBillPayment(billId string, branchId string, req dto.UpdateSupplierBillPaymentRequest) error {
 	ctx := context.Background()
 
 	// Fetch current bill
-	bill, err := DB_GetSupplierBillByID(billId)
+	bill, err := DB_GetSupplierBillByID(billId, branchId)
 	if err != nil {
 		return err
 	}
@@ -135,9 +139,14 @@ func DB_UpdateSupplierBillPayment(billId string, req dto.UpdateSupplierBillPayme
 		updateFields["notes"] = req.Notes
 	}
 
+	filter := bson.M{"billId": billId}
+	if branchId != "" {
+		filter["branchId"] = branchId
+	}
+
 	_, err = dbConfigs.SupplierBillCollection.UpdateOne(
 		ctx,
-		bson.M{"billId": billId},
+		filter,
 		bson.M{"$set": updateFields},
 	)
 	return err

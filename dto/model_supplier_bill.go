@@ -48,6 +48,7 @@ type UpdateSupplierBillPaymentRequest struct {
 	PaidAmount    float64 `json:"paidAmount"`
 	PaymentMethod string  `json:"paymentMethod"`
 	Notes         string  `json:"notes"`
+	BranchId      string  `json:"branchId"`
 }
 
 // SearchSupplierBillQuery filters for listing supplier bills.
