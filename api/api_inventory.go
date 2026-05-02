@@ -130,15 +130,44 @@ func GetStockTransferByTransferID(c *fiber.Ctx) error {
 	if id == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Missing transfer ID"})
 	}
+
+	// Validate branch authorization
+	branchId, err := ResolveBranchId(c, c.Query("branchId"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+
 	transfer, err := dao.DB_GetStockTransferByTransferID(id)
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Stock transfer not found"})
 	}
+
+	// Verify transfer belongs to authorized branch
+	if transfer.FromBranchId != branchId && transfer.ToBranchId != branchId {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Unauthorized access to transfer"})
+	}
+
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"data": transfer})
 }
 
 func CompleteStockTransfer(c *fiber.Ctx) error {
 	id := c.Query("id")
+
+	// Validate branch authorization
+	branchId, err := ResolveBranchId(c, c.Query("branchId"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	// Verify transfer belongs to authorized branch
+	transfer, err := dao.DB_GetStockTransferByTransferID(id)
+	if err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Stock transfer not found"})
+	}
+	if transfer.FromBranchId != branchId && transfer.ToBranchId != branchId {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Unauthorized access to transfer"})
+	}
+
 	if err := dao.DB_CompleteStockTransfer(id); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Failed to complete transfer: " + err.Error()})
 	}
@@ -147,6 +176,22 @@ func CompleteStockTransfer(c *fiber.Ctx) error {
 
 func CancelStockTransfer(c *fiber.Ctx) error {
 	id := c.Query("id")
+
+	// Validate branch authorization
+	branchId, err := ResolveBranchId(c, c.Query("branchId"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	// Verify transfer belongs to authorized branch
+	transfer, err := dao.DB_GetStockTransferByTransferID(id)
+	if err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Stock transfer not found"})
+	}
+	if transfer.FromBranchId != branchId && transfer.ToBranchId != branchId {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Unauthorized access to transfer"})
+	}
+
 	if err := dao.DB_CancelStockTransfer(id); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Failed to cancel transfer: " + err.Error()})
 	}
@@ -159,6 +204,22 @@ func CancelStockTransfer(c *fiber.Ctx) error {
 // PATCH /stock-transfers/:id/approve
 func ApproveStockTransfer(c *fiber.Ctx) error {
 	id := c.Query("id")
+
+	// Validate branch authorization
+	branchId, err := ResolveBranchId(c, c.Query("branchId"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	// Verify transfer belongs to authorized branch
+	transfer, err := dao.DB_GetStockTransferByTransferID(id)
+	if err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Stock transfer not found"})
+	}
+	if transfer.FromBranchId != branchId && transfer.ToBranchId != branchId {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Unauthorized access to transfer"})
+	}
+
 	approvedBy, _ := c.Locals("uid").(string)
 	if err := dao.DB_ApproveStockTransfer(id, approvedBy); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Failed to approve transfer: " + err.Error()})
@@ -206,4 +267,3 @@ func GetBranchStocks(c *fiber.Ctx) error {
 		},
 	})
 }
-
