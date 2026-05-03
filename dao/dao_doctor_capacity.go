@@ -86,11 +86,11 @@ func DB_EnsureCapacity(doctorID, branchId string, date time.Time) error {
 	update := bson.M{
 		"$setOnInsert": bson.M{
 			"doctorDailyCapacityId": genId,
-			"doctorId":             doctorID,
-			"branchId":             branchId,
-			"date":                 dateStr,
-			"booked":               0,
-			"max":                  maxPatients,
+			"doctorId":              doctorID,
+			"branchId":              branchId,
+			"date":                  dateStr,
+			"booked":                0,
+			"max":                   maxPatients,
 		},
 	}
 	opts := options.Update().SetUpsert(true)
@@ -139,10 +139,10 @@ func DB_BookAppointmentCapacity(doctorID, branchId string, date time.Time, force
 
 	// Atomic: only update if booked < max.
 	filter := bson.M{
-		"doctorId":         doctorID,
-		"branchId":         branchId,
-		"date":             dateStr,
-		"$expr":            bson.M{"$lt": bson.A{"$booked", "$max"}},
+		"doctorId": doctorID,
+		"branchId": branchId,
+		"date":     dateStr,
+		"$expr":    bson.M{"$lt": bson.A{"$booked", "$max"}},
 	}
 	result, err := dbConfigs.DoctorDailyCapacityCollection.UpdateOne(
 		context.Background(),
@@ -214,11 +214,11 @@ func DB_CreateDailyCapacity(cap dto.DoctorDailyCapacity) (*dto.DoctorDailyCapaci
 	update := bson.M{
 		"$setOnInsert": bson.M{
 			"doctorDailyCapacityId": cap.DoctorDailyCapacityId,
-			"doctorId":             cap.DoctorID,
-			"branchId":             cap.BranchId,
-			"date":                 cap.Date,
-			"booked":               cap.Booked,
-			"max":                  cap.Max,
+			"doctorId":              cap.DoctorID,
+			"branchId":              cap.BranchId,
+			"date":                  cap.Date,
+			"booked":                cap.Booked,
+			"max":                   cap.Max,
 		},
 	}
 	opts := options.Update().SetUpsert(true)
@@ -252,11 +252,51 @@ func DB_UpdateDailyCapacity(capacityId string, max, booked int) (*dto.DoctorDail
 	return DB_GetDailyCapacityById(capacityId)
 }
 
+// DB_UpdateDailyCapacityByIdAndBranch lets an admin update the max/booked
+// values of an existing capacity record, scoped to a resolved branch.
+func DB_UpdateDailyCapacityByIdAndBranch(capacityId, branchId string, max, booked int) (*dto.DoctorDailyCapacity, error) {
+	filter := bson.M{
+		"doctorDailyCapacityId": capacityId,
+		"branchId":              branchId,
+	}
+	update := bson.M{
+		"$set": bson.M{
+			"max":    max,
+			"booked": booked,
+		},
+	}
+	result, err := dbConfigs.DoctorDailyCapacityCollection.UpdateOne(context.Background(), filter, update)
+	if err != nil {
+		return nil, err
+	}
+	if result.MatchedCount == 0 {
+		return nil, mongo.ErrNoDocuments
+	}
+	return DB_GetDailyCapacityByIdAndBranch(capacityId, branchId)
+}
+
 // DB_GetDailyCapacityById fetches a capacity record by its doctorDailyCapacityId.
 func DB_GetDailyCapacityById(capacityId string) (*dto.DoctorDailyCapacity, error) {
 	var cap dto.DoctorDailyCapacity
 	err := dbConfigs.DoctorDailyCapacityCollection.FindOne(context.Background(), bson.M{
 		"doctorDailyCapacityId": capacityId,
+	}).Decode(&cap)
+	if err == mongo.ErrNoDocuments {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &cap, nil
+}
+
+// DB_GetDailyCapacityByIdAndBranch fetches a capacity record by its
+// doctorDailyCapacityId, constrained to the resolved branch.
+func DB_GetDailyCapacityByIdAndBranch(capacityId, branchId string) (*dto.DoctorDailyCapacity, error) {
+	var cap dto.DoctorDailyCapacity
+	err := dbConfigs.DoctorDailyCapacityCollection.FindOne(context.Background(), bson.M{
+		"doctorDailyCapacityId": capacityId,
+		"branchId":              branchId,
 	}).Decode(&cap)
 	if err == mongo.ErrNoDocuments {
 		return nil, nil
@@ -329,4 +369,3 @@ func mustParseDate(s string) time.Time {
 	t, _ := time.Parse("2006-01-02", s)
 	return t
 }
-

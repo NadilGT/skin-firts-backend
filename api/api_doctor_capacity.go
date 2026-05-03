@@ -55,6 +55,31 @@ func GetSingleDailyCapacity(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(cap)
 }
 
+// ─── GET /doctor-daily-capacity/by-id ──────────────────────────────────────
+// Query params: doctorDailyCapacityId (required), branchId (required/resolved)
+// Returns a single capacity record by ID within the resolved branch scope.
+func GetDailyCapacityByID(c *fiber.Ctx) error {
+	capacityId := c.Query("doctorDailyCapacityId")
+	if capacityId == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "doctorDailyCapacityId is required"})
+	}
+
+	branchId, err := ResolveBranchId(c, c.Query("branchId"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	cap, err := dao.DB_GetDailyCapacityByIdAndBranch(capacityId, branchId)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch capacity record"})
+	}
+	if cap == nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Capacity record not found"})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(cap)
+}
+
 // ─── POST /doctor-daily-capacity ─────────────────────────────────────────────
 // Body: { doctorId, branchId, date, max, booked? }
 // Admin creates a capacity record manually.
@@ -97,6 +122,11 @@ func UpdateDailyCapacity(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "doctorDailyCapacityId is required"})
 	}
 
+	branchId, err := ResolveBranchId(c, c.Query("branchId"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+
 	var body struct {
 		Max    int `json:"max"`
 		Booked int `json:"booked"`
@@ -111,7 +141,7 @@ func UpdateDailyCapacity(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "booked cannot be negative"})
 	}
 
-	updated, err := dao.DB_UpdateDailyCapacity(capacityId, body.Max, body.Booked)
+	updated, err := dao.DB_UpdateDailyCapacityByIdAndBranch(capacityId, branchId, body.Max, body.Booked)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Capacity record not found"})
@@ -120,7 +150,6 @@ func UpdateDailyCapacity(c *fiber.Ctx) error {
 	}
 	return c.Status(fiber.StatusOK).JSON(updated)
 }
-
 
 // ─── DELETE /doctor-daily-capacity ───────────────────────────────────────────
 // Query params: doctorDailyCapacityId (required), branchId (optional/resolved)

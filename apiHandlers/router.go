@@ -89,8 +89,8 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 	// ========== APPOINTMENT ROUTES ==========
 	app.Get("/appointment/next-number/doctorId", api.GetNextAppointmentNumber)
 	app.Get("/appointments/running/doctorId", api.GetRunningAppointmentNumber)
-	app.Patch("/appointments/id/running", authMiddleware.ValidateToken, BranchMiddleware,RequiresRole("admin"), api.SetAppointmentRunning)
-	app.Post("/create/appointment",authMiddleware.ValidateToken, api.CreateAppointment)
+	app.Patch("/appointments/id/running", authMiddleware.ValidateToken, BranchMiddleware, RequiresRole("admin"), api.SetAppointmentRunning)
+	app.Post("/create/appointment", authMiddleware.ValidateToken, api.CreateAppointment)
 	// Branch-scoped: admins see their branch; super_admin sees all
 	app.Get("/findAll/appointments", authMiddleware.ValidateToken, BranchMiddleware, api.GetAllAppointments)
 	app.Get("/findAll/appointments/doctor", authMiddleware.ValidateToken, BranchMiddleware, api.GetAppointmentsByDoctorID)
@@ -155,11 +155,13 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 	// ========== DOCTOR DAILY CAPACITY ROUTES (admin-only) ==========
 	// GET  /doctor-daily-capacity         → list all (filter by doctorId, branchId, fromDate, toDate)
 	// GET  /doctor-daily-capacity/single  → single record by doctorId+branchId+date
+	// GET  /doctor-daily-capacity/by-id   → single record by doctorDailyCapacityId+branchId
 	// POST /doctor-daily-capacity         → manually create a record
 	// PUT  /doctor-daily-capacity         → update max/booked by doctorId+branchId+date
 	// DELETE /doctor-daily-capacity       → delete record (date becomes unlimited)
 	app.Get("/doctor-daily-capacity", authMiddleware.ValidateToken, BranchMiddleware, api.GetAllDailyCapacities)
 	app.Get("/doctor-daily-capacity/single", authMiddleware.ValidateToken, BranchMiddleware, api.GetSingleDailyCapacity)
+	app.Get("/doctor-daily-capacity/by-id", authMiddleware.ValidateToken, BranchMiddleware, api.GetDailyCapacityByID)
 	app.Post("/doctor-daily-capacity", authMiddleware.ValidateToken, BranchMiddleware, RequiresRole("admin"), api.CreateDailyCapacity)
 	app.Put("/doctor-daily-capacity", authMiddleware.ValidateToken, BranchMiddleware, RequiresRole("admin"), api.UpdateDailyCapacity)
 	app.Delete("/doctor-daily-capacity", authMiddleware.ValidateToken, BranchMiddleware, RequiresRole("admin"), api.DeleteDailyCapacity)
@@ -263,4 +265,3 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 	app.Patch("/approvals/:id/approve", authMiddleware.ValidateToken, RequiresRole("admin"), api.ApproveRecord)
 	app.Patch("/approvals/:id/reject", authMiddleware.ValidateToken, RequiresRole("admin"), api.RejectRecord)
 }
-
