@@ -9,7 +9,10 @@ require (
 	google.golang.org/api v0.249.0
 )
 
-require github.com/jung-kurt/gofpdf v1.16.2 // indirect
+require (
+	github.com/jung-kurt/gofpdf v1.16.2 // indirect
+	github.com/resend/resend-go/v2 v2.28.0 // indirect
+)
 
 require (
 	cel.dev/expr v0.24.0 // indirect
