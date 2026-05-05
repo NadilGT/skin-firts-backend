@@ -73,10 +73,11 @@ type RegisterUserRequest struct {
 
 // SearchStaffQuery represents the query parameters for searching staff.
 type SearchStaffQuery struct {
-	Query string `json:"query" query:"query"`
-	Role  string `json:"role" query:"role"`
-	Page  int    `json:"page" query:"page"`
-	Limit int    `json:"limit" query:"limit"`
+	Query    string `json:"query" query:"query"`
+	Role     string `json:"role" query:"role"`
+	BranchId string `json:"branchId" query:"branchId"`
+	Page     int    `json:"page" query:"page"`
+	Limit    int    `json:"limit" query:"limit"`
 }
 
 // StaffMember is a unified representation of any staff/admin/doctor user for search results.

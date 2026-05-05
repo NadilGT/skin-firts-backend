@@ -203,6 +203,14 @@ func (h *StaffHandler) SearchStaff(c *fiber.Ctx) error {
 		})
 	}
 
+	branchId, err := ResolveBranchId(c, query.BranchId)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+	query.BranchId = branchId
+
 	// Default pagination
 	if query.Page <= 0 {
 		query.Page = 1

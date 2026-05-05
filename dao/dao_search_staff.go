@@ -22,6 +22,9 @@ func DB_SearchStaff(query dto.SearchStaffQuery) ([]dto.StaffMember, int64, error
 			{"phoneNumber": bson.M{"$regex": query.Query, "$options": "i"}},
 		}
 	}
+	if query.BranchId != "" {
+		filter["branchId"] = query.BranchId
+	}
 
 	// 2. Identify target collections based on role filter
 	var mainCollection *mongo.Collection
