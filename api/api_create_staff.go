@@ -93,32 +93,33 @@ func (h *StaffHandler) CreateStaffAccount(c *fiber.Ctx) error {
 	}
 
 	// 3. Generate Password Reset Link and Send Email
+	log.Printf("[CreateStaff] Generating password reset link for %s…", req.Email)
 	resetLink, err := client.PasswordResetLink(ctx, req.Email)
 	if err != nil {
-		log.Println("⚠️ Failed to generate password reset link:", err)
-		// We won't rollback here, but we'll notify that email sending failed
+		log.Printf("[CreateStaff] ⚠️ Failed to generate password reset link: %v", err)
+		// We won't rollback here — user was created but link could not be generated
 	} else {
-		// Send the email asynchronously so it doesn't block the API response
-		go func(email, name, role, link string) {
-			emailSubject := "Welcome to the Med Center Portal - Set up your account"
-			emailBody := fmt.Sprintf(`
-				<h2>Hello %s!</h2>
-				<p>An account has been created for you as a <strong>%s</strong>.</p>
-				<p>Please click the link below to set your password and access the portal:</p>
-				<a href="%s" style="padding:10px 15px;background-color:#007bff;color:white;text-decoration:none;border-radius:5px;">Set Password</a>
-				<br><br>
-				<p>If the button doesn't work, copy and paste this link into your browser:</p>
-				<p>%s</p>
-				<br>
-				<p>Thanks,<br>Management Team</p>
-			`, name, role, link, link)
+		log.Printf("[CreateStaff] ✅ Password reset link generated. Now sending email to %s…", req.Email)
 
-			if err := utils.SendEmail([]string{email}, emailSubject, emailBody); err != nil {
-				log.Println("⚠️ Failed to send password reset email:", err)
-			} else {
-				log.Println("✅ Password reset email sent securely to:", email)
-			}
-		}(req.Email, req.Name, req.Role, resetLink)
+		// Send email synchronously so any error is visible in Render logs
+		emailSubject := "Welcome to the Med Center Portal - Set up your account"
+		emailBody := fmt.Sprintf(`
+			<h2>Hello %s!</h2>
+			<p>An account has been created for you as a <strong>%s</strong>.</p>
+			<p>Please click the link below to set your password and access the portal:</p>
+			<a href="%s" style="padding:10px 15px;background-color:#007bff;color:white;text-decoration:none;border-radius:5px;">Set Password</a>
+			<br><br>
+			<p>If the button doesn't work, copy and paste this link into your browser:</p>
+			<p>%s</p>
+			<br>
+			<p>Thanks,<br>Management Team</p>
+		`, req.Name, req.Role, resetLink, resetLink)
+
+		if emailErr := utils.SendEmail([]string{req.Email}, emailSubject, emailBody); emailErr != nil {
+			log.Printf("[CreateStaff] ❌ Failed to send welcome email to %s: %v", req.Email, emailErr)
+		} else {
+			log.Printf("[CreateStaff] ✅ Welcome email sent to %s", req.Email)
+		}
 	}
 
 	// 4. Save to MongoDB
