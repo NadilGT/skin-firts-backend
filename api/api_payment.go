@@ -125,3 +125,25 @@ func GetPendingPayments(c *fiber.Ctx) error {
 		"total": total,
 	})
 }
+
+// GetTotalRevenue returns the combined revenue from pharmacy bills (paymentStatus=PAID)
+// and hospital bills (confirm=true) for a given date and branchId.
+// Query params: branchId (required), date (YYYY-MM-DD, defaults to today)
+func GetTotalRevenue(c *fiber.Ctx) error {
+	branchId, err := ResolveBranchId(c, c.Query("branchId"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	date := c.Query("date") // optional — defaults to today inside DAO
+
+	result, err := dao.DB_GetTotalRevenue(branchId, date)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to calculate revenue: " + err.Error(),
+		})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{"data": result})
+}
+
