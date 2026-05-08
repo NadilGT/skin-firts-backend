@@ -2,9 +2,12 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"lawyerSL-Backend/dao"
 	"lawyerSL-Backend/dto"
+	"lawyerSL-Backend/functions"
 	"lawyerSL-Backend/utils"
+	"log"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -108,13 +111,32 @@ func CreatePurchaseOrder(c *fiber.Ctx) error {
 		return err
 	}
 	po.BranchId = branchId
-	// Calculate total
+
+	// ── Auto-fill UnitCost from SupplierMedicinePrice catalogue ─────────────
 	var total float64
 	for i := range po.Items {
+		priceRecord, err := dao.DB_GetSupplierMedicinePriceBySupplierAndMedicine(
+			po.SupplierId,
+			po.Items[i].MedicineID,
+		)
+		if err != nil || priceRecord == nil {
+			return c.Status(fiber.StatusUnprocessableEntity).JSON(fiber.Map{
+				"error": fmt.Sprintf(
+					"No active price configured for supplier '%s' and medicine '%s' (%s). "+
+						"Please add a price via POST /supplier-medicine-price first.",
+					po.SupplierId,
+					po.Items[i].MedicineName,
+					po.Items[i].MedicineID,
+				),
+			})
+		}
+		po.Items[i].UnitCost = priceRecord.UnitPrice
 		po.Items[i].TotalCost = float64(po.Items[i].Quantity) * po.Items[i].UnitCost
 		total += po.Items[i].TotalCost
 	}
 	po.TotalAmount = total
+	// ─────────────────────────────────────────────────────────────────────────
+
 
 	id, err := dao.GenerateId(context.Background(), "purchase_orders", "PO")
 	if err != nil {
@@ -129,9 +151,68 @@ func CreatePurchaseOrder(c *fiber.Ctx) error {
 	if err := dao.DB_CreatePurchaseOrder(po); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create purchase order: " + err.Error()})
 	}
+
+	// ── Fire-and-forget: generate PDF and email it to the supplier ──────────
+	go func(po dto.PurchaseOrderModel) {
+		// 1. Generate the PDF
+		pdfBytes, err := functions.GeneratePurchaseOrderPDF(po)
+		if err != nil {
+			log.Printf("[PO EMAIL] Failed to generate PDF for %s: %v", po.PoId, err)
+			return
+		}
+
+		// 2. Look up supplier email
+		supplier, err := dao.DB_GetSupplierByID(po.SupplierId)
+		if err != nil || supplier == nil {
+			log.Printf("[PO EMAIL] Could not fetch supplier %s: %v", po.SupplierId, err)
+			return
+		}
+		if supplier.Email == "" {
+			log.Printf("[PO EMAIL] Supplier %s has no email — skipping", po.SupplierId)
+			return
+		}
+
+		// 3. Build email body
+		subject := fmt.Sprintf("Purchase Order %s — Skin First Medical Center", po.PoId)
+		body := fmt.Sprintf(`
+<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto">
+  <div style="background:#0F6270;padding:20px;text-align:center">
+    <h2 style="color:#fff;margin:0">Skin First Medical Center</h2>
+    <p style="color:#CCF0F6;margin:4px 0 0">Purchase Order Notification</p>
+  </div>
+  <div style="padding:24px;border:1px solid #e0e0e0">
+    <p>Dear <strong>%s</strong>,</p>
+    <p>Please find attached the Purchase Order <strong>%s</strong> raised on <strong>%s</strong>.</p>
+    <table style="width:100%%;border-collapse:collapse;margin:16px 0">
+      <tr><td style="padding:6px;font-weight:bold;color:#555">PO ID:</td><td style="padding:6px">%s</td></tr>
+      <tr style="background:#f5fcfd"><td style="padding:6px;font-weight:bold;color:#555">Status:</td><td style="padding:6px">%s</td></tr>
+      <tr><td style="padding:6px;font-weight:bold;color:#555">Total Amount:</td><td style="padding:6px">Rs. %.2f</td></tr>
+    </table>
+    <p style="color:#555">Kindly acknowledge receipt of this order at your earliest convenience.</p>
+    <p style="color:#888;font-size:12px;margin-top:32px">This is an automated email from Skin First Medical Center. Please do not reply directly to this message.</p>
+  </div>
+</div>`,
+			supplier.Name,
+			po.PoId,
+			po.CreatedAt.Format("02 Jan 2006"),
+			po.PoId,
+			po.Status,
+			po.TotalAmount,
+		)
+
+		// 4. Send email with PDF attached
+		filename := fmt.Sprintf("%s.pdf", po.PoId)
+		if err := utils.SendEmailWithAttachment([]string{supplier.Email}, subject, body, pdfBytes, filename); err != nil {
+			log.Printf("[PO EMAIL] Failed to send email for %s to %s: %v", po.PoId, supplier.Email, err)
+			return
+		}
+		log.Printf("[PO EMAIL] ✅ PO %s emailed to supplier %s (%s)", po.PoId, supplier.Name, supplier.Email)
+	}(po)
+	// ───────────────────────────────────────────────────────────────────────
+
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
-		"message": "Purchase order created successfully", 
-		"data": po,
+		"message": "Purchase order created successfully",
+		"data":    po,
 	})
 }
 

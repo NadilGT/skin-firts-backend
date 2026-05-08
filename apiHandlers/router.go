@@ -196,6 +196,15 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 	app.Put("/suppliers/id", authMiddleware.ValidateToken, BranchMiddleware, api.UpdateSupplier)
 	app.Delete("/suppliers/id", authMiddleware.ValidateToken, BranchMiddleware, api.DeleteSupplier)
 
+	// ========== SUPPLIER MEDICINE PRICE (branch-scoped) ==========
+	// Catalogue of agreed unit prices per supplier-medicine pair.
+	// These prices are auto-loaded during Purchase Order creation.
+	app.Post("/supplier-medicine-price", authMiddleware.ValidateToken, BranchMiddleware, api.CreateSupplierMedicinePrice)
+	app.Get("/supplier-medicine-price", authMiddleware.ValidateToken, BranchMiddleware, api.GetSupplierMedicinePrices)
+	app.Get("/supplier-medicine-price/:id", authMiddleware.ValidateToken, BranchMiddleware, api.GetSupplierMedicinePriceByID)
+	app.Put("/supplier-medicine-price/:id", authMiddleware.ValidateToken, BranchMiddleware, api.UpdateSupplierMedicinePrice)
+	app.Delete("/supplier-medicine-price/:id", authMiddleware.ValidateToken, BranchMiddleware, api.DeleteSupplierMedicinePrice)
+
 	// ========== PURCHASE ORDERS (branch-scoped) ==========
 	app.Post("/purchase-orders", authMiddleware.ValidateToken, BranchMiddleware, api.CreatePurchaseOrder)
 	app.Get("/purchase-orders", authMiddleware.ValidateToken, BranchMiddleware, api.GetPurchaseOrders)

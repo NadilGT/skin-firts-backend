@@ -109,3 +109,36 @@ type SearchGRNQuery struct {
 	Page       int    `json:"page" query:"page"`
 	Limit      int    `json:"limit" query:"limit"`
 }
+
+// ──────────────────────────────────────────────
+//
+//	Supplier Medicine Price
+//
+// ──────────────────────────────────────────────
+
+// SupplierMedicinePrice records the agreed unit price for a specific medicine
+// from a specific supplier.  A compound unique index on (supplierId, medicineId)
+// prevents duplicate rows.
+type SupplierMedicinePrice struct {
+	ID           primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
+	PriceId      string             `json:"priceId" bson:"priceId"`
+	SupplierId   string             `json:"supplierId" bson:"supplierId"`
+	MedicineId   string             `json:"medicineId" bson:"medicineId"`
+	MedicineName string             `json:"medicineName" bson:"medicineName"`
+	UnitPrice    float64            `json:"unitPrice" bson:"unitPrice"`
+	IsActive     bool               `json:"isActive" bson:"isActive"`
+	CreatedAt    time.Time          `json:"createdAt" bson:"createdAt"`
+	UpdatedAt    time.Time          `json:"updatedAt" bson:"updatedAt"`
+}
+
+type SearchSupplierMedicinePriceQuery struct {
+	SupplierId string `json:"supplierId" query:"supplierId"`
+	MedicineId string `json:"medicineId" query:"medicineId"`
+	IsActive   *bool  `json:"isActive" query:"isActive"`
+}
+
+type UpdateSupplierMedicinePriceRequest struct {
+	UnitPrice float64 `json:"unitPrice"`
+	IsActive  *bool   `json:"isActive"`
+}
+

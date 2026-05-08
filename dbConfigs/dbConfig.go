@@ -48,6 +48,7 @@ var RejectStockCollection *mongo.Collection
 var SupplierBillCollection *mongo.Collection
 var ApprovalCollection *mongo.Collection
 var StockAdjustmentCollection *mongo.Collection
+var SupplierMedicinePriceCollection *mongo.Collection
 
 func ConnectMongoDB(uri string) *mongo.Client {
 	client, err := mongo.NewClient(options.Client().ApplyURI(uri))
@@ -116,6 +117,10 @@ func ConnectMongoDB(uri string) *mongo.Client {
 	StockTransferCollection = erpOperationsDb.Collection("stock_transfers")
 	SupplierBillCollection = erpOperationsDb.Collection("supplier_bills")
 	ApprovalCollection = erpOperationsDb.Collection("approvals")
+	SupplierMedicinePriceCollection = erpOperationsDb.Collection("supplier_medicine_prices")
+
+	// Ensure compound unique index on supplier_medicine_prices
+	ensureSupplierMedicinePriceIndexes()
 
 	return client
 }
