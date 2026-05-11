@@ -119,6 +119,7 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 
 	// ========== MEDICINE BATCH ROUTES ==========
 	app.Post("/batches", api.CreateMedicineBatch)
+	app.Put("/batches/:id", authMiddleware.ValidateToken, api.UpdateMedicineBatch)
 	app.Get("/batches/medicineId", api.GetBatchesByMedicineID)
 	app.Get("/batches/available/medicineId", api.GetAvailableBatchesFEFO)
 	app.Get("/batches/active-stock/medicineId", api.GetActiveStockByMedicineID)
@@ -282,4 +283,28 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 	app.Get("/approvals", authMiddleware.ValidateToken, BranchMiddleware, api.GetApprovals)
 	app.Patch("/approvals/:id/approve", authMiddleware.ValidateToken, RequiresRole("admin"), api.ApproveRecord)
 	app.Patch("/approvals/:id/reject", authMiddleware.ValidateToken, RequiresRole("admin"), api.RejectRecord)
+
+	// ========== STORAGE MANAGEMENT (Racks/Shelves/Locations) ==========
+	app.Post("/api/racks", authMiddleware.ValidateToken, RequiresRole("admin"), api.CreateRack)
+	app.Get("/api/racks", authMiddleware.ValidateToken, api.GetRacks)
+	app.Get("/api/racks/:id", authMiddleware.ValidateToken, api.GetRackByID)
+	app.Put("/api/racks/:id", authMiddleware.ValidateToken, RequiresRole("admin"), api.UpdateRack)
+	app.Patch("/api/racks/:id/deactivate", authMiddleware.ValidateToken, RequiresRole("admin"), api.DeactivateRack)
+	app.Patch("/api/racks/:id/activate", authMiddleware.ValidateToken, RequiresRole("admin"), api.ActivateRack)
+
+	app.Post("/api/shelves", authMiddleware.ValidateToken, RequiresRole("admin"), api.CreateShelf)
+	app.Get("/api/shelves", authMiddleware.ValidateToken, api.GetShelves)
+	app.Get("/api/shelves/:id", authMiddleware.ValidateToken, api.GetShelfByID)
+	app.Put("/api/shelves/:id", authMiddleware.ValidateToken, RequiresRole("admin"), api.UpdateShelf)
+	app.Patch("/api/shelves/:id/deactivate", authMiddleware.ValidateToken, RequiresRole("admin"), api.DeactivateShelf)
+	app.Patch("/api/shelves/:id/activate", authMiddleware.ValidateToken, RequiresRole("admin"), api.ActivateShelf)
+	app.Get("/api/racks/:rackId/shelves", authMiddleware.ValidateToken, api.GetShelvesByRackID)
+
+	app.Post("/api/locations", authMiddleware.ValidateToken, RequiresRole("admin"), api.CreateLocation)
+	app.Get("/api/locations", authMiddleware.ValidateToken, api.GetLocations)
+	app.Get("/api/locations/:id", authMiddleware.ValidateToken, api.GetLocationByID)
+	app.Put("/api/locations/:id", authMiddleware.ValidateToken, RequiresRole("admin"), api.UpdateLocation)
+	app.Patch("/api/locations/:id/deactivate", authMiddleware.ValidateToken, RequiresRole("admin"), api.DeactivateLocation)
+	app.Patch("/api/locations/:id/activate", authMiddleware.ValidateToken, RequiresRole("admin"), api.ActivateLocation)
+	app.Get("/api/shelves/:shelfId/locations", authMiddleware.ValidateToken, api.GetLocationsByShelfID)
 }

@@ -213,6 +213,31 @@ func CreateMedicineBatch(c *fiber.Ctx) error {
 	batch.ID = primitive.NewObjectID()
 	batch.CreatedAt = time.Now()
 
+	if batch.LocationId == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Active medicine batches require a valid storage location.",
+		})
+	}
+
+	location, err := dao.DB_GetLocationByID(batch.LocationId)
+	if err != nil || !location.IsActive {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Active medicine batches require a valid storage location.",
+		})
+	}
+
+	// Map cached location fields for fast lookup
+	batch.LocationCode = location.Code
+
+	rack, err := dao.DB_GetRackByID(location.RackId)
+	if err == nil {
+		batch.RackName = rack.Name
+	}
+	shelf, err := dao.DB_GetShelfByID(location.ShelfId)
+	if err == nil {
+		batch.ShelfName = shelf.Name
+	}
+
 	if batch.Status == "" {
 		batch.Status = "ACTIVE"
 	}
@@ -226,6 +251,56 @@ func CreateMedicineBatch(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
 		"message": "Medicine batch created successfully",
 		"data":    batch,
+	})
+}
+
+func UpdateMedicineBatch(c *fiber.Ctx) error {
+	batchId := c.Params("id")
+	if batchId == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Missing batch ID"})
+	}
+
+	var req struct {
+		LocationId string `json:"locationId"`
+		Status     string `json:"status"`
+		Notes      string `json:"notes"`
+	}
+
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
+	}
+
+	locationCode := ""
+	rackName := ""
+	shelfName := ""
+
+	if req.LocationId != "" {
+		location, err := dao.DB_GetLocationByID(req.LocationId)
+		if err != nil || !location.IsActive {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid or inactive storage location."})
+		}
+		locationCode = location.Code
+		rack, err := dao.DB_GetRackByID(location.RackId)
+		if err == nil {
+			rackName = rack.Name
+		}
+		shelf, err := dao.DB_GetShelfByID(location.ShelfId)
+		if err == nil {
+			shelfName = shelf.Name
+		}
+	}
+
+	if req.Status == "" {
+		req.Status = "ACTIVE"
+	}
+
+	err := dao.DB_UpdateMedicineBatch(batchId, req.LocationId, locationCode, rackName, shelfName, req.Status, req.Notes)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update medicine batch: " + err.Error()})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"message": "Medicine batch updated successfully",
 	})
 }
 
@@ -269,8 +344,39 @@ func GetAvailableBatchesFEFO(c *fiber.Ctx) error {
 		})
 	}
 
+	// Format response to match required FEFO billing structure
+	type LocationDetail struct {
+		Code      string `json:"code"`
+		RackName  string `json:"rackName"`
+		ShelfName string `json:"shelfName"`
+	}
+	type SelectedBatch struct {
+		BatchId      string         `json:"batchId"`
+		BatchNumber  string         `json:"batchNumber"`
+		ExpiryDate   string         `json:"expiryDate"` // Format as string for API
+		AvailableQty int            `json:"availableQty"`
+		SellingPrice float64        `json:"sellingPrice"`
+		Location     LocationDetail `json:"location"`
+	}
+
+	var formattedBatches []SelectedBatch
+	for _, b := range batches {
+		formattedBatches = append(formattedBatches, SelectedBatch{
+			BatchId:      b.BatchId,
+			BatchNumber:  b.BatchNumber,
+			ExpiryDate:   b.ExpiryDate.Format("2006-01-02"),
+			AvailableQty: b.Quantity - b.ReservedQuantity,
+			SellingPrice: b.SellingPrice,
+			Location: LocationDetail{
+				Code:      b.LocationCode,
+				RackName:  b.RackName,
+				ShelfName: b.ShelfName,
+			},
+		})
+	}
+
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
-		"data": batches,
+		"data": formattedBatches,
 	})
 }
 

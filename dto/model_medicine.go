@@ -33,15 +33,22 @@ type MedicineModel struct {
 // MedicineBatch is a GLOBAL concept — one shipment from a supplier.
 // It has NO quantity, NO branch. It describes what the batch IS.
 type MedicineBatch struct {
-	ID          primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
-	BatchId     string             `json:"batchId" bson:"batchId"`       // BAT-XXXX
-	MedicineId  string             `json:"medicineId" bson:"medicineId"` // FK → Medicine
-	BatchNumber string             `json:"batchNumber" bson:"batchNumber"` // physical label e.g. "B2024-001"
-	ExpiryDate  time.Time          `json:"expiryDate" bson:"expiryDate"`
-	BuyingPrice float64            `json:"buyingPrice" bson:"buyingPrice"`
-	SellingPrice float64           `json:"sellingPrice" bson:"sellingPrice"`
-	SupplierId  string             `json:"supplierId,omitempty" bson:"supplierId,omitempty"`
-	// Status: ACTIVE | EXPIRED | BLOCKED (NOT out-of-stock — that's derived from BranchStock)
+	ID           primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
+	BatchId      string             `json:"batchId" bson:"batchId"`       // BAT-XXXX
+	MedicineId   string             `json:"medicineId" bson:"medicineId"` // FK → Medicine
+	BatchNumber  string             `json:"batchNumber" bson:"batchNumber"` // physical label e.g. "B2024-001"
+	ExpiryDate   time.Time          `json:"expiryDate" bson:"expiryDate"`
+	BuyingPrice  float64            `json:"buyingPrice" bson:"buyingPrice"`
+	SellingPrice float64            `json:"sellingPrice" bson:"sellingPrice"`
+	SupplierId   string             `json:"supplierId,omitempty" bson:"supplierId,omitempty"`
+	
+	// Location mappings
+	LocationId   string             `json:"locationId" bson:"locationId"`
+	LocationCode string             `json:"locationCode,omitempty" bson:"locationCode,omitempty"`
+	RackName     string             `json:"rackName,omitempty" bson:"rackName,omitempty"`
+	ShelfName    string             `json:"shelfName,omitempty" bson:"shelfName,omitempty"`
+
+	// Status: ACTIVE | EXPIRED | DAMAGED | QUARANTINED
 	Status    string    `json:"status" bson:"status"`
 	Notes     string    `json:"notes,omitempty" bson:"notes,omitempty"`
 	CreatedAt time.Time `json:"createdAt" bson:"createdAt"`
@@ -76,6 +83,11 @@ type BranchStockView struct {
 	SellingPrice float64   `json:"sellingPrice" bson:"sellingPrice"`
 	BuyingPrice  float64   `json:"buyingPrice" bson:"buyingPrice"`
 	BatchStatus  string    `json:"batchStatus" bson:"batchStatus"`
+
+	// From MedicineBatch (Location)
+	LocationCode string `json:"locationCode,omitempty" bson:"locationCode,omitempty"`
+	RackName     string `json:"rackName,omitempty" bson:"rackName,omitempty"`
+	ShelfName    string `json:"shelfName,omitempty" bson:"shelfName,omitempty"`
 }
 
 // BillItem represents one line in a confirmed bill.

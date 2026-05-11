@@ -246,6 +246,24 @@ func DB_CreateMedicineBatch(batch dto.MedicineBatch) error {
 	return err
 }
 
+// DB_UpdateMedicineBatch updates an existing batch's location, status, and notes.
+func DB_UpdateMedicineBatch(batchId string, locationId string, locationCode string, rackName string, shelfName string, status string, notes string) error {
+	filter := bson.M{"batchId": batchId}
+	update := bson.M{
+		"$set": bson.M{
+			"locationId":   locationId,
+			"locationCode": locationCode,
+			"rackName":     rackName,
+			"shelfName":    shelfName,
+			"status":       status,
+			"notes":        notes,
+			"updatedAt":    time.Now(),
+		},
+	}
+	_, err := dbConfigs.MedicineBatchCollection.UpdateOne(context.Background(), filter, update)
+	return err
+}
+
 // DB_CreateBranchStock inserts a branch-specific stock record.
 func DB_CreateBranchStock(stock dto.BranchStock) error {
 	_, err := dbConfigs.BranchStockCollection.InsertOne(context.Background(), stock)
@@ -278,17 +296,22 @@ func DB_GetBranchStockByBatch(batchId, branchId string) (*dto.BranchStock, error
 	return &s, nil
 }
 
+// IsExpired returns true if the batch's expiry date has passed.
+func IsExpired(expiryDate time.Time) bool {
+	return expiryDate.Before(time.Now())
+}
+
 // DB_GetAvailableBatchesFEFO performs an aggregation JOIN in Go layer:
 //   medicine_batches (for expiryDate + prices) + branch_stock (for branchId + available qty)
 // Returns BranchStockView sorted by expiryDate ASC (First Expiring First Out).
 func DB_GetAvailableBatchesFEFO(medicineID, branchId string) ([]dto.BranchStockView, error) {
 	ctx := context.Background()
 
-	// 1. Get non-expired, non-blocked batches for this medicine
+	// 1. Get non-expired, active batches for this medicine
 	batchFilter := bson.M{
 		"medicineId": medicineID,
 		"expiryDate": bson.M{"$gt": time.Now()},
-		"status":     bson.M{"$ne": "BLOCKED"},
+		"status":     "ACTIVE",
 	}
 	batchCursor, err := dbConfigs.MedicineBatchCollection.Find(ctx, batchFilter)
 	if err != nil {
@@ -339,6 +362,12 @@ func DB_GetAvailableBatchesFEFO(medicineID, branchId string) ([]dto.BranchStockV
 	var views []dto.BranchStockView
 	for _, s := range stocks {
 		batch := batchMap[s.BatchId]
+		
+		// Skip expired batches using helper (even though db query should filter, defense in depth)
+		if IsExpired(batch.ExpiryDate) {
+			continue
+		}
+
 		views = append(views, dto.BranchStockView{
 			StockId:          s.StockId,
 			BatchId:          s.BatchId,
@@ -351,6 +380,9 @@ func DB_GetAvailableBatchesFEFO(medicineID, branchId string) ([]dto.BranchStockV
 			SellingPrice:     batch.SellingPrice,
 			BuyingPrice:      batch.BuyingPrice,
 			BatchStatus:      batch.Status,
+			LocationCode:     batch.LocationCode,
+			RackName:         batch.RackName,
+			ShelfName:        batch.ShelfName,
 		})
 	}
 
@@ -364,6 +396,22 @@ func DB_GetAvailableBatchesFEFO(medicineID, branchId string) ([]dto.BranchStockV
 	}
 
 	return views, nil
+}
+
+// GetBestBatchForBilling auto-selects the optimal batch for billing
+// according to FEFO rules: active, non-expired, nearest expiry date with stock > 0.
+func DB_GetBestBatchForBilling(medicineID, branchId string) (*dto.BranchStockView, error) {
+	views, err := DB_GetAvailableBatchesFEFO(medicineID, branchId)
+	if err != nil {
+		return nil, err
+	}
+	if len(views) == 0 {
+		return nil, fmt.Errorf("no valid batches available for billing")
+	}
+
+	// Because DB_GetAvailableBatchesFEFO already sorts by ExpiryDate ascending
+	// and filters out expired/inactive batches, the first item is the best batch.
+	return &views[0], nil
 }
 
 // DB_GetActiveStockByMedicineID returns total available qty across all stock for a medicine in a branch.

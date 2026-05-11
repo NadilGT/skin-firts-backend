@@ -6,6 +6,7 @@ import (
 	"log"
 	"time"
 
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -41,6 +42,11 @@ var SupplierCollection *mongo.Collection
 var PurchaseOrderCollection *mongo.Collection
 var GRNCollection *mongo.Collection
 var StockTransferCollection *mongo.Collection
+
+// Storage system modules
+var RackCollection *mongo.Collection
+var ShelfCollection *mongo.Collection
+var LocationCollection *mongo.Collection
 
 // ERP/WMS audit + workflow collections
 var StockMovementCollection *mongo.Collection
@@ -118,9 +124,56 @@ func ConnectMongoDB(uri string) *mongo.Client {
 	SupplierBillCollection = erpOperationsDb.Collection("supplier_bills")
 	ApprovalCollection = erpOperationsDb.Collection("approvals")
 	SupplierMedicinePriceCollection = erpOperationsDb.Collection("supplier_medicine_prices")
+	
+	RackCollection = erpOperationsDb.Collection("racks")
+	ShelfCollection = erpOperationsDb.Collection("shelves")
+	LocationCollection = erpOperationsDb.Collection("locations")
+	SupplierMedicinePriceCollection = erpOperationsDb.Collection("supplier_medicine_prices")
 
 	// Ensure compound unique index on supplier_medicine_prices
 	ensureSupplierMedicinePriceIndexes()
+	
+	// Ensure physical storage indexes
+	ensureStorageIndexes()
 
 	return client
 }
+
+func ensureStorageIndexes() {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// 1. Unique Rack Name
+	RackCollection.Indexes().CreateOne(ctx, mongo.IndexModel{
+		Keys:    bson.M{"name": 1},
+		Options: options.Index().SetUnique(true),
+	})
+
+	// 2. Shelf Lookup
+	ShelfCollection.Indexes().CreateOne(ctx, mongo.IndexModel{
+		Keys: bson.D{{Key: "rackId", Value: 1}, {Key: "isActive", Value: 1}},
+	})
+
+	// 3. Unique Location Code
+	LocationCollection.Indexes().CreateOne(ctx, mongo.IndexModel{
+		Keys:    bson.M{"code": 1},
+		Options: options.Index().SetUnique(true),
+	})
+
+	// 4. Unique Position inside Shelf
+	LocationCollection.Indexes().CreateOne(ctx, mongo.IndexModel{
+		Keys:    bson.D{{Key: "shelfId", Value: 1}, {Key: "position", Value: 1}},
+		Options: options.Index().SetUnique(true),
+	})
+
+	// 5. Batch Lookup For Billing
+	MedicineBatchCollection.Indexes().CreateOne(ctx, mongo.IndexModel{
+		Keys: bson.M{"locationId": 1},
+	})
+
+	// 6. FEFO Support Index on Batches
+	MedicineBatchCollection.Indexes().CreateOne(ctx, mongo.IndexModel{
+		Keys: bson.D{{Key: "medicineId", Value: 1}, {Key: "expiryDate", Value: 1}, {Key: "quantity", Value: 1}},
+	})
+}
+
