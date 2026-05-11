@@ -380,6 +380,62 @@ func GetAvailableBatchesFEFO(c *fiber.Ctx) error {
 	})
 }
 
+func GetBestBatchesForMedicine(c *fiber.Ctx) error {
+	id := c.Params("medicineId")
+	if id == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Missing medicineId in path",
+		})
+	}
+
+	branchId, err := ResolveBranchId(c, c.Query("branchId"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	batches, err := dao.DB_GetAvailableBatchesFEFO(id, branchId)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to retrieve available batches",
+		})
+	}
+
+	// Format response to match required FEFO billing structure
+	type LocationDetail struct {
+		Code      string `json:"code"`
+		RackName  string `json:"rackName"`
+		ShelfName string `json:"shelfName"`
+	}
+	type SelectedBatch struct {
+		BatchId      string         `json:"batchId"`
+		BatchNumber  string         `json:"batchNumber"`
+		ExpiryDate   string         `json:"expiryDate"` // Format as string for API
+		AvailableQty int            `json:"availableQty"`
+		SellingPrice float64        `json:"sellingPrice"`
+		Location     LocationDetail `json:"location"`
+	}
+
+	var formattedBatches []SelectedBatch
+	for _, b := range batches {
+		formattedBatches = append(formattedBatches, SelectedBatch{
+			BatchId:      b.BatchId,
+			BatchNumber:  b.BatchNumber,
+			ExpiryDate:   b.ExpiryDate.Format("2006-01-02"),
+			AvailableQty: b.Quantity - b.ReservedQuantity,
+			SellingPrice: b.SellingPrice,
+			Location: LocationDetail{
+				Code:      b.LocationCode,
+				RackName:  b.RackName,
+				ShelfName: b.ShelfName,
+			},
+		})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"data": formattedBatches,
+	})
+}
+
 func GetActiveStockByMedicineID(c *fiber.Ctx) error {
 	id := c.Query("medicineId")
 	if id == "" {

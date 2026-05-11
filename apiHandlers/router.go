@@ -113,6 +113,7 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 	app.Get("/medicines/search", api.SearchMedicines)
 	app.Get("/medicines/low-stock", api.GetLowStockMedicines)
 	app.Get("/medicines/barcode", api.GetMedicineByBarcode)
+	app.Get("/medicines/:medicineId/best-batch", api.GetBestBatchesForMedicine)
 	app.Get("/medicines/:id", api.GetMedicineByID)
 	app.Put("/medicines/:id", api.UpdateMedicine)
 	app.Delete("/medicines/:id", api.DeleteMedicine)
