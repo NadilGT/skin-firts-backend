@@ -58,3 +58,12 @@ type CreateHospitalBillRequest struct {
 	Discount     float64           `json:"discount"`
 	Tax          float64           `json:"tax"`
 }
+
+type SearchHospitalBillQuery struct {
+	BranchId  string `json:"branchId" query:"branchId"`
+	DoctorId  string `json:"doctorId" query:"doctorId"`
+	From      string `json:"from" query:"from"`
+	To        string `json:"to" query:"to"`
+	Page      int    `json:"page" query:"page"`
+	Limit     int    `json:"limit" query:"limit"`
+}

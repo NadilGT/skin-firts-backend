@@ -300,3 +300,65 @@ func DB_GetPendingPayments(branchId string, page, limit int) ([]dto.BillModel, i
 	}
 	return append(partialBills, pendingBills...), partialTotal + pendingTotal, nil
 }
+
+// DB_SearchPharmacyBillsReport searches pharmacy bills and returns the list, total count, and total sum of netTotal.
+func DB_SearchPharmacyBillsReport(query dto.SearchBillQuery) ([]dto.BillModel, int64, float64, error) {
+	bills, total, err := DB_SearchPharmacyBills(query)
+	if err != nil {
+		return nil, 0, 0, err
+	}
+
+	ctx := context.Background()
+	filter := bson.M{}
+
+	if query.BranchId != "" {
+		filter["branchId"] = query.BranchId
+	}
+	if query.PaymentStatus != "" {
+		filter["paymentStatus"] = query.PaymentStatus
+	}
+	if query.Status != "" {
+		filter["status"] = query.Status
+	}
+
+	// Date range on createdAt
+	if query.From != "" || query.To != "" {
+		dateFilter := bson.M{}
+		if query.From != "" {
+			if t, err := time.Parse("2006-01-02", query.From); err == nil {
+				dateFilter["$gte"] = t
+			}
+		}
+		if query.To != "" {
+			if t, err := time.Parse("2006-01-02", query.To); err == nil {
+				dateFilter["$lte"] = t.Add(24 * time.Hour)
+			}
+		}
+		if len(dateFilter) > 0 {
+			filter["createdAt"] = dateFilter
+		}
+	}
+
+	// Sum the netTotal for all matching records
+	var totalSum float64
+	pipeline := mongo.Pipeline{
+		bson.D{{Key: "$match", Value: filter}},
+		bson.D{{Key: "$group", Value: bson.M{
+			"_id":      nil,
+			"netTotal": bson.M{"$sum": "$netTotal"},
+		}}},
+	}
+	aggCursor, err := dbConfigs.BillCollection.Aggregate(ctx, pipeline)
+	if err == nil {
+		defer aggCursor.Close(ctx)
+		var result struct {
+			NetTotal float64 `bson:"netTotal"`
+		}
+		if aggCursor.Next(ctx) {
+			_ = aggCursor.Decode(&result)
+			totalSum = result.NetTotal
+		}
+	}
+
+	return bills, total, totalSum, nil
+}

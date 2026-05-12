@@ -147,3 +147,41 @@ func GetTotalRevenue(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"data": result})
 }
 
+// GetBillsReport returns a filtered list of bills along with the total sum of their netTotal
+func GetBillsReport(c *fiber.Ctx) error {
+	var query dto.SearchBillQuery
+	if err := c.QueryParser(&query); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid query parameters"})
+	}
+	if query.Page <= 0 {
+		query.Page = 1
+	}
+	if query.Limit <= 0 {
+		query.Limit = 20
+	}
+	// Support single-day `date` shortcut: ?date=YYYY-MM-DD sets both from/to
+	if d := c.Query("date"); d != "" {
+		query.From = d
+		query.To = d
+	}
+
+	branchId, err := ResolveBranchId(c, query.BranchId)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+	query.BranchId = branchId
+
+	bills, total, totalAmount, err := dao.DB_SearchPharmacyBillsReport(query)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch bills report: " + err.Error()})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"data":        bills,
+		"totalAmount": totalAmount,
+		"pagination": fiber.Map{
+			"page": query.Page, "limit": query.Limit, "total": total,
+			"totalPages": (total + int64(query.Limit) - 1) / int64(query.Limit),
+		},
+	})
+}
