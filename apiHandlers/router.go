@@ -223,6 +223,9 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 	app.Get("/inventory/stock-valuation", authMiddleware.ValidateToken, BranchMiddleware, api.GetStockValuation)
 	app.Get("/inventory/expiry-alerts", authMiddleware.ValidateToken, BranchMiddleware, api.GetExpiryAlerts)
 	app.Get("/inventory/stock-report", authMiddleware.ValidateToken, BranchMiddleware, api.GetInventoryStockReport)
+	// /inventory/stocks/enriched MUST be registered before /inventory/stocks
+	// so Fiber routes "enriched" as a literal path, not a param.
+	app.Get("/inventory/stocks/enriched", authMiddleware.ValidateToken, BranchMiddleware, api.GetBranchStocksEnriched)
 	app.Get("/inventory/stocks", authMiddleware.ValidateToken, BranchMiddleware, api.GetBranchStocks)
 
 	// ========== STOCK TRANSFERS (branch-scoped) ==========
@@ -311,4 +314,11 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 	app.Patch("/api/locations/:id/deactivate", authMiddleware.ValidateToken, RequiresRole("admin"), api.DeactivateLocation)
 	app.Patch("/api/locations/:id/activate", authMiddleware.ValidateToken, RequiresRole("admin"), api.ActivateLocation)
 	app.Get("/api/shelves/:shelfId/locations", authMiddleware.ValidateToken, api.GetLocationsByShelfID)
+
+	// ── Location drill-down: batches stored at a specific slot ──
+	// MUST be registered before /api/locations/:id to avoid param collision
+	app.Get("/api/locations/:id/batches", authMiddleware.ValidateToken, api.GetBatchesByLocation)
+
+	// ── Warehouse Map: full rack → shelf → location → batch tree ──
+	app.Get("/api/warehouse/map", authMiddleware.ValidateToken, api.GetWarehouseMap)
 }

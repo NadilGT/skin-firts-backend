@@ -187,3 +187,16 @@ type SearchBranchStockQuery struct {
 	Page       int    `json:"page" query:"page"`
 	Limit      int    `json:"limit" query:"limit"`
 }
+
+// SearchBranchStockEnrichedQuery is used by the storage dashboard.
+// It supports filtering by location fields and returns BranchStockView
+// (branch_stock joined with medicine_batches to expose locationCode, rackName, shelfName).
+type SearchBranchStockEnrichedQuery struct {
+	BranchId   string `json:"branchId" query:"branchId"`
+	MedicineId string `json:"medicineId" query:"medicineId"`
+	LocationId string `json:"locationId" query:"locationId"`
+	RackName   string `json:"rackName" query:"rackName"`
+	ShelfName  string `json:"shelfName" query:"shelfName"`
+	Page       int    `json:"page" query:"page"`
+	Limit      int    `json:"limit" query:"limit"`
+}

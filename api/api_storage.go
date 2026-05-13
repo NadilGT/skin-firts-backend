@@ -277,3 +277,52 @@ func GetLocationsByShelfID(c *fiber.Ctx) error {
 	}
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"data": locations})
 }
+
+// ==========================================
+// WAREHOUSE MAP / DASHBOARD APIs
+// ==========================================
+
+// GetWarehouseMap returns the complete storage hierarchy tree:
+//   Rack → Shelf → Location → [Batches with per-branch stock quantities]
+//
+// This is the primary endpoint for the visual rack/shelf/location dashboard.
+// The frontend can render each rack as a grid of shelf rows × location columns,
+// coloring each cell by occupancy / expiry status.
+//
+// GET /api/warehouse/map
+func GetWarehouseMap(c *fiber.Ctx) error {
+	tree, err := dao.DB_GetWarehouseMap()
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to build warehouse map: " + err.Error(),
+		})
+	}
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"data":  tree,
+		"count": len(tree),
+	})
+}
+
+// GetBatchesByLocation returns all medicine batches stored at a specific
+// physical location slot. Used when the user clicks on a cell in the rack map UI.
+//
+// GET /api/locations/:id/batches
+func GetBatchesByLocation(c *fiber.Ctx) error {
+	locationId := c.Params("id")
+	if locationId == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Missing location ID"})
+	}
+
+	batches, err := dao.DB_GetBatchesByLocation(locationId)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to fetch batches for location: " + err.Error(),
+		})
+	}
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"locationId": locationId,
+		"data":       batches,
+		"count":      len(batches),
+	})
+}
+

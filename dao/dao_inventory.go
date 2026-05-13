@@ -683,3 +683,126 @@ func DB_SearchBranchStocks(query dto.SearchBranchStockQuery) ([]dto.BranchStock,
 	}
 	return stocks, total, nil
 }
+
+// DB_GetBranchStocksEnriched returns paginated branch stock records with
+// medicine batch details (including location info) joined via $lookup.
+// Supports filtering by branchId, medicineId, locationId, rackName, shelfName.
+// This is the primary API for the storage dashboard table view.
+func DB_GetBranchStocksEnriched(query dto.SearchBranchStockEnrichedQuery) ([]dto.BranchStockView, int64, error) {
+	ctx := context.Background()
+
+	if query.Page <= 0 {
+		query.Page = 1
+	}
+	if query.Limit <= 0 {
+		query.Limit = 20
+	}
+
+	// ── Stage 1: Match on branch_stock fields ──
+	stockMatch := bson.M{}
+	if query.BranchId != "" {
+		stockMatch["branchId"] = query.BranchId
+	}
+	if query.MedicineId != "" {
+		stockMatch["medicineId"] = query.MedicineId
+	}
+
+	// ── Stage 2: $lookup join to medicine_batches ──
+	lookupStage := bson.D{{Key: "$lookup", Value: bson.M{
+		"from":         "medicine_batches",
+		"localField":   "batchId",
+		"foreignField": "batchId",
+		"as":           "batchInfo",
+	}}}
+	unwindStage := bson.D{{Key: "$unwind", Value: bson.M{
+		"path":                       "$batchInfo",
+		"preserveNullAndEmptyArrays": true,
+	}}}
+
+	// ── Stage 3: Match on joined batch fields (location filters) ──
+	batchMatch := bson.M{}
+	if query.LocationId != "" {
+		batchMatch["batchInfo.locationId"] = query.LocationId
+	}
+	if query.RackName != "" {
+		batchMatch["batchInfo.rackName"] = bson.M{"$regex": query.RackName, "$options": "i"}
+	}
+	if query.ShelfName != "" {
+		batchMatch["batchInfo.shelfName"] = bson.M{"$regex": query.ShelfName, "$options": "i"}
+	}
+
+	// Count pipeline (without skip/limit)
+	countPipeline := mongo.Pipeline{
+		bson.D{{Key: "$match", Value: stockMatch}},
+		lookupStage,
+		unwindStage,
+	}
+	if len(batchMatch) > 0 {
+		countPipeline = append(countPipeline, bson.D{{Key: "$match", Value: batchMatch}})
+	}
+	countPipeline = append(countPipeline, bson.D{{Key: "$count", Value: "total"}})
+
+	countCursor, err := dbConfigs.BranchStockCollection.Aggregate(ctx, countPipeline)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer countCursor.Close(ctx)
+	var countResult []struct {
+		Total int64 `bson:"total"`
+	}
+	_ = countCursor.All(ctx, &countResult)
+	var total int64
+	if len(countResult) > 0 {
+		total = countResult[0].Total
+	}
+
+	// ── Stage 4: $project — flatten into BranchStockView shape ──
+	projectStage := bson.D{{Key: "$project", Value: bson.M{
+		"stockId":          1,
+		"batchId":          1,
+		"medicineId":       1,
+		"branchId":         1,
+		"quantity":         1,
+		"reservedQuantity": 1,
+		"batchNumber":      "$batchInfo.batchNumber",
+		"expiryDate":       "$batchInfo.expiryDate",
+		"sellingPrice":     "$batchInfo.sellingPrice",
+		"buyingPrice":      "$batchInfo.buyingPrice",
+		"batchStatus":      "$batchInfo.status",
+		"locationCode":     "$batchInfo.locationCode",
+		"rackName":         "$batchInfo.rackName",
+		"shelfName":        "$batchInfo.shelfName",
+	}}}
+
+	// Data pipeline
+	dataPipeline := mongo.Pipeline{
+		bson.D{{Key: "$match", Value: stockMatch}},
+		lookupStage,
+		unwindStage,
+	}
+	if len(batchMatch) > 0 {
+		dataPipeline = append(dataPipeline, bson.D{{Key: "$match", Value: batchMatch}})
+	}
+	dataPipeline = append(dataPipeline,
+		bson.D{{Key: "$sort", Value: bson.D{{Key: "batchInfo.expiryDate", Value: 1}}}},
+		bson.D{{Key: "$skip", Value: int64((query.Page - 1) * query.Limit)}},
+		bson.D{{Key: "$limit", Value: int64(query.Limit)}},
+		projectStage,
+	)
+
+	cursor, err := dbConfigs.BranchStockCollection.Aggregate(ctx, dataPipeline)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer cursor.Close(ctx)
+
+	var results []dto.BranchStockView
+	if err = cursor.All(ctx, &results); err != nil {
+		return nil, 0, err
+	}
+	if results == nil {
+		results = []dto.BranchStockView{}
+	}
+	return results, total, nil
+}
+

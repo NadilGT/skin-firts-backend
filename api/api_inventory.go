@@ -267,3 +267,49 @@ func GetBranchStocks(c *fiber.Ctx) error {
 		},
 	})
 }
+
+// GetBranchStocksEnriched returns paginated branch stock with location data joined in.
+// This is the storage dashboard table endpoint — it shows WHERE each stock is stored.
+//
+// GET /inventory/stocks/enriched
+// Query params:
+//   branchId   — filter by branch (required for non-super-admins)
+//   medicineId — filter by medicine
+//   locationId — filter by exact location slot
+//   rackName   — filter by rack name (case-insensitive)
+//   shelfName  — filter by shelf name (case-insensitive)
+//   page, limit — pagination
+//
+// Response fields per item: stockId, batchId, medicineId, branchId, quantity,
+//   reservedQuantity, batchNumber, expiryDate, sellingPrice, buyingPrice,
+//   batchStatus, locationCode, rackName, shelfName
+func GetBranchStocksEnriched(c *fiber.Ctx) error {
+	var query dto.SearchBranchStockEnrichedQuery
+	if err := c.QueryParser(&query); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid query parameters"})
+	}
+
+	branchId, err := ResolveBranchId(c, query.BranchId)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+	query.BranchId = branchId
+
+	stocks, total, err := dao.DB_GetBranchStocksEnriched(query)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to fetch enriched branch stocks: " + err.Error(),
+		})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"data": stocks,
+		"pagination": fiber.Map{
+			"page":       query.Page,
+			"limit":      query.Limit,
+			"total":      total,
+			"totalPages": (total + int64(query.Limit) - 1) / int64(query.Limit),
+		},
+	})
+}
+

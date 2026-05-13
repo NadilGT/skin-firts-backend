@@ -450,3 +450,201 @@ func DB_ActivateLocation(locationId string) error {
 	}
 	return nil
 }
+
+// ==========================================
+// WAREHOUSE MAP & DASHBOARD DAOs
+// ==========================================
+
+// DB_GetBatchesByLocation returns all medicine batches currently assigned to a
+// specific physical location slot. Used for the "drill-into-cell" view on the rack map UI.
+func DB_GetBatchesByLocation(locationId string) ([]dto.MedicineBatch, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	filter := bson.M{"locationId": locationId}
+	cursor, err := dbConfigs.MedicineBatchCollection.Find(ctx, filter,
+		options.Find().SetSort(bson.D{{Key: "expiryDate", Value: 1}}))
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var batches []dto.MedicineBatch
+	if err = cursor.All(ctx, &batches); err != nil {
+		return nil, err
+	}
+	return batches, nil
+}
+
+// DB_GetWarehouseMap builds and returns the full physical storage tree:
+//   Rack → Shelf → Location → [BatchSummary with per-branch stock]
+//
+// It fetches all active racks, shelves, locations and batches, then
+// assembles the tree in-memory. This keeps the logic simple and readable —
+// pharmacy storage collections are small (typically < 1000 documents each).
+func DB_GetWarehouseMap() ([]dto.RackWithShelves, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	// 1. Fetch ALL racks (active + inactive so admins can see the full map)
+	rackCursor, err := dbConfigs.RackCollection.Find(ctx, bson.M{},
+		options.Find().SetSort(bson.D{{Key: "name", Value: 1}}))
+	if err != nil {
+		return nil, fmt.Errorf("fetch racks: %w", err)
+	}
+	defer rackCursor.Close(ctx)
+	var allRacks []dto.Rack
+	if err = rackCursor.All(ctx, &allRacks); err != nil {
+		return nil, err
+	}
+
+	// 2. Fetch ALL shelves
+	shelfCursor, err := dbConfigs.ShelfCollection.Find(ctx, bson.M{},
+		options.Find().SetSort(bson.D{{Key: "name", Value: 1}}))
+	if err != nil {
+		return nil, fmt.Errorf("fetch shelves: %w", err)
+	}
+	defer shelfCursor.Close(ctx)
+	var allShelves []dto.Shelf
+	if err = shelfCursor.All(ctx, &allShelves); err != nil {
+		return nil, err
+	}
+
+	// 3. Fetch ALL locations
+	locationCursor, err := dbConfigs.LocationCollection.Find(ctx, bson.M{},
+		options.Find().SetSort(bson.D{{Key: "position", Value: 1}}))
+	if err != nil {
+		return nil, fmt.Errorf("fetch locations: %w", err)
+	}
+	defer locationCursor.Close(ctx)
+	var allLocations []dto.Location
+	if err = locationCursor.All(ctx, &allLocations); err != nil {
+		return nil, err
+	}
+
+	// 4. Fetch ALL active medicine batches (with location assignments)
+	batchCursor, err := dbConfigs.MedicineBatchCollection.Find(ctx,
+		bson.M{"locationId": bson.M{"$ne": ""}},
+		options.Find().SetSort(bson.D{{Key: "expiryDate", Value: 1}}))
+	if err != nil {
+		return nil, fmt.Errorf("fetch batches: %w", err)
+	}
+	defer batchCursor.Close(ctx)
+	var allBatches []dto.MedicineBatch
+	if err = batchCursor.All(ctx, &allBatches); err != nil {
+		return nil, err
+	}
+
+	// 5. Fetch ALL branch stock records (for quantity data)
+	stockCursor, err := dbConfigs.BranchStockCollection.Find(ctx, bson.M{})
+	if err != nil {
+		return nil, fmt.Errorf("fetch branch stock: %w", err)
+	}
+	defer stockCursor.Close(ctx)
+	var allStocks []dto.BranchStock
+	if err = stockCursor.All(ctx, &allStocks); err != nil {
+		return nil, err
+	}
+
+	// 6. Collect unique medicine IDs to resolve names
+	medIdSet := make(map[string]bool)
+	for _, b := range allBatches {
+		medIdSet[b.MedicineId] = true
+	}
+	medIds := make([]string, 0, len(medIdSet))
+	for id := range medIdSet {
+		medIds = append(medIds, id)
+	}
+	nameMap := make(map[string]string)
+	if len(medIds) > 0 {
+		nameMap, _ = DB_GetMedicineNamesByIDs(medIds)
+	}
+
+	// 7. Build lookup maps for in-memory joins
+	// batchId → []BranchStockSlim
+	stockByBatch := make(map[string][]dto.BranchStockSlim)
+	for _, s := range allStocks {
+		stockByBatch[s.BatchId] = append(stockByBatch[s.BatchId], dto.BranchStockSlim{
+			BranchId:  s.BranchId,
+			Quantity:  s.Quantity,
+			Available: s.Quantity - s.ReservedQuantity,
+		})
+	}
+
+	// locationId → []BatchSummary
+	batchesByLocation := make(map[string][]dto.BatchSummary)
+	for _, b := range allBatches {
+		if b.LocationId == "" {
+			continue
+		}
+		summary := dto.BatchSummary{
+			BatchId:      b.BatchId,
+			MedicineId:   b.MedicineId,
+			MedicineName: nameMap[b.MedicineId],
+			BatchNumber:  b.BatchNumber,
+			ExpiryDate:   b.ExpiryDate,
+			Status:       b.Status,
+			BranchStocks: stockByBatch[b.BatchId],
+		}
+		if summary.BranchStocks == nil {
+			summary.BranchStocks = []dto.BranchStockSlim{}
+		}
+		batchesByLocation[b.LocationId] = append(batchesByLocation[b.LocationId], summary)
+	}
+
+	// shelfId → []LocationWithBatches
+	locationsByShelf := make(map[string][]dto.LocationWithBatches)
+	for _, loc := range allLocations {
+		batches := batchesByLocation[loc.LocationId]
+		if batches == nil {
+			batches = []dto.BatchSummary{}
+		}
+		lwb := dto.LocationWithBatches{
+			LocationId:  loc.LocationId,
+			Code:        loc.Code,
+			Position:    loc.Position,
+			Description: loc.Description,
+			IsOccupied:  loc.IsOccupied,
+			IsActive:    loc.IsActive,
+			Batches:     batches,
+		}
+		locationsByShelf[loc.ShelfId] = append(locationsByShelf[loc.ShelfId], lwb)
+	}
+
+	// rackId → []ShelfWithLocations
+	shelvesByRack := make(map[string][]dto.ShelfWithLocations)
+	for _, shelf := range allShelves {
+		locs := locationsByShelf[shelf.ShelfId]
+		if locs == nil {
+			locs = []dto.LocationWithBatches{}
+		}
+		swl := dto.ShelfWithLocations{
+			ShelfId:     shelf.ShelfId,
+			RackId:      shelf.RackId,
+			Name:        shelf.Name,
+			Description: shelf.Description,
+			IsActive:    shelf.IsActive,
+			Locations:   locs,
+		}
+		shelvesByRack[shelf.RackId] = append(shelvesByRack[shelf.RackId], swl)
+	}
+
+	// 8. Assemble the final tree
+	result := make([]dto.RackWithShelves, 0, len(allRacks))
+	for _, rack := range allRacks {
+		shelves := shelvesByRack[rack.RackId]
+		if shelves == nil {
+			shelves = []dto.ShelfWithLocations{}
+		}
+		result = append(result, dto.RackWithShelves{
+			RackId:      rack.RackId,
+			Name:        rack.Name,
+			Description: rack.Description,
+			IsActive:    rack.IsActive,
+			Shelves:     shelves,
+		})
+	}
+
+	return result, nil
+}
+
