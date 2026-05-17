@@ -63,6 +63,7 @@ type RackWithShelves struct {
 type Rack struct {
 	ID          primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
 	RackId      string             `json:"rackId" bson:"rackId"`
+	BranchId    string             `json:"branchId" bson:"branchId"`
 	Name        string             `json:"name" bson:"name"` // e.g. A, B, C
 	Description string             `json:"description" bson:"description"`
 	IsActive    bool               `json:"isActive" bson:"isActive"`
@@ -73,6 +74,7 @@ type Rack struct {
 type Shelf struct {
 	ID          primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
 	ShelfId     string             `json:"shelfId" bson:"shelfId"`
+	BranchId    string             `json:"branchId" bson:"branchId"`
 	RackId      string             `json:"rackId" bson:"rackId"`
 	Name        string             `json:"name" bson:"name"` // e.g. 1, 2, 3
 	Description string             `json:"description" bson:"description"`
@@ -84,6 +86,7 @@ type Shelf struct {
 type Location struct {
 	ID          primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
 	LocationId  string             `json:"locationId" bson:"locationId"`
+	BranchId    string             `json:"branchId" bson:"branchId"`
 	RackId      string             `json:"rackId" bson:"rackId"`
 	ShelfId     string             `json:"shelfId" bson:"shelfId"`
 	Position    int                `json:"position" bson:"position"`

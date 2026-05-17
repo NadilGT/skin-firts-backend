@@ -35,11 +35,14 @@ func DB_CreateRack(rack dto.Rack) error {
 	return err
 }
 
-func DB_GetRacks(search string, activeOnly bool, page, limit int) ([]dto.Rack, int64, error) {
+func DB_GetRacks(branchId, search string, activeOnly bool, page, limit int) ([]dto.Rack, int64, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	filter := bson.M{}
+	if branchId != "" {
+		filter["branchId"] = branchId
+	}
 	if activeOnly {
 		filter["isActive"] = true
 	}
@@ -171,11 +174,14 @@ func DB_CreateShelf(shelf dto.Shelf) error {
 	return err
 }
 
-func DB_GetShelves(rackId string, activeOnly bool, page, limit int) ([]dto.Shelf, int64, error) {
+func DB_GetShelves(branchId, rackId string, activeOnly bool, page, limit int) ([]dto.Shelf, int64, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	filter := bson.M{}
+	if branchId != "" {
+		filter["branchId"] = branchId
+	}
 	if rackId != "" {
 		filter["rackId"] = rackId
 	}
@@ -325,11 +331,14 @@ func DB_CreateLocation(location dto.Location) error {
 	return err
 }
 
-func DB_GetLocations(rackId, shelfId, searchCode string, activeOnly bool, page, limit int) ([]dto.Location, int64, error) {
+func DB_GetLocations(branchId, rackId, shelfId, searchCode string, activeOnly bool, page, limit int) ([]dto.Location, int64, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	filter := bson.M{}
+	if branchId != "" {
+		filter["branchId"] = branchId
+	}
 	if rackId != "" {
 		filter["rackId"] = rackId
 	}
@@ -482,12 +491,16 @@ func DB_GetBatchesByLocation(locationId string) ([]dto.MedicineBatch, error) {
 // It fetches all active racks, shelves, locations and batches, then
 // assembles the tree in-memory. This keeps the logic simple and readable —
 // pharmacy storage collections are small (typically < 1000 documents each).
-func DB_GetWarehouseMap() ([]dto.RackWithShelves, error) {
+func DB_GetWarehouseMap(branchId string) ([]dto.RackWithShelves, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
 	// 1. Fetch ALL racks (active + inactive so admins can see the full map)
-	rackCursor, err := dbConfigs.RackCollection.Find(ctx, bson.M{},
+	rackFilter := bson.M{}
+	if branchId != "" {
+		rackFilter["branchId"] = branchId
+	}
+	rackCursor, err := dbConfigs.RackCollection.Find(ctx, rackFilter,
 		options.Find().SetSort(bson.D{{Key: "name", Value: 1}}))
 	if err != nil {
 		return nil, fmt.Errorf("fetch racks: %w", err)
@@ -499,7 +512,11 @@ func DB_GetWarehouseMap() ([]dto.RackWithShelves, error) {
 	}
 
 	// 2. Fetch ALL shelves
-	shelfCursor, err := dbConfigs.ShelfCollection.Find(ctx, bson.M{},
+	shelfFilter := bson.M{}
+	if branchId != "" {
+		shelfFilter["branchId"] = branchId
+	}
+	shelfCursor, err := dbConfigs.ShelfCollection.Find(ctx, shelfFilter,
 		options.Find().SetSort(bson.D{{Key: "name", Value: 1}}))
 	if err != nil {
 		return nil, fmt.Errorf("fetch shelves: %w", err)
@@ -511,7 +528,11 @@ func DB_GetWarehouseMap() ([]dto.RackWithShelves, error) {
 	}
 
 	// 3. Fetch ALL locations
-	locationCursor, err := dbConfigs.LocationCollection.Find(ctx, bson.M{},
+	locFilter := bson.M{}
+	if branchId != "" {
+		locFilter["branchId"] = branchId
+	}
+	locationCursor, err := dbConfigs.LocationCollection.Find(ctx, locFilter,
 		options.Find().SetSort(bson.D{{Key: "position", Value: 1}}))
 	if err != nil {
 		return nil, fmt.Errorf("fetch locations: %w", err)
@@ -536,7 +557,11 @@ func DB_GetWarehouseMap() ([]dto.RackWithShelves, error) {
 	}
 
 	// 5. Fetch ALL branch stock records (for quantity data)
-	stockCursor, err := dbConfigs.BranchStockCollection.Find(ctx, bson.M{})
+	stockFilter := bson.M{}
+	if branchId != "" {
+		stockFilter["branchId"] = branchId
+	}
+	stockCursor, err := dbConfigs.BranchStockCollection.Find(ctx, stockFilter)
 	if err != nil {
 		return nil, fmt.Errorf("fetch branch stock: %w", err)
 	}

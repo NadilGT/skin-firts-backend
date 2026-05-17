@@ -20,6 +20,11 @@ func CreateRack(c *fiber.Ctx) error {
 	if rack.Name == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Name is required"})
 	}
+	branchId, err := ResolveBranchId(c, rack.BranchId)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized or missing branchId"})
+	}
+	rack.BranchId = branchId
 	rack.IsActive = true
 
 	if err := dao.DB_CreateRack(rack); err != nil {
@@ -29,12 +34,16 @@ func CreateRack(c *fiber.Ctx) error {
 }
 
 func GetRacks(c *fiber.Ctx) error {
+	branchId, err := ResolveBranchId(c, c.Query("branchId"))
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized or missing branchId"})
+	}
 	search := c.Query("search")
 	activeOnly := c.Query("activeOnly") == "true"
 	page, _ := strconv.Atoi(c.Query("page", "1"))
 	limit, _ := strconv.Atoi(c.Query("limit", "20"))
 
-	racks, total, err := dao.DB_GetRacks(search, activeOnly, page, limit)
+	racks, total, err := dao.DB_GetRacks(branchId, search, activeOnly, page, limit)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch racks"})
 	}
@@ -99,6 +108,11 @@ func CreateShelf(c *fiber.Ctx) error {
 	if shelf.Name == "" || shelf.RackId == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Name and RackId are required"})
 	}
+	branchId, err := ResolveBranchId(c, shelf.BranchId)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized or missing branchId"})
+	}
+	shelf.BranchId = branchId
 	shelf.IsActive = true
 
 	if err := dao.DB_CreateShelf(shelf); err != nil {
@@ -108,12 +122,16 @@ func CreateShelf(c *fiber.Ctx) error {
 }
 
 func GetShelves(c *fiber.Ctx) error {
+	branchId, err := ResolveBranchId(c, c.Query("branchId"))
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized or missing branchId"})
+	}
 	rackId := c.Query("rackId")
 	activeOnly := c.Query("activeOnly") == "true"
 	page, _ := strconv.Atoi(c.Query("page", "1"))
 	limit, _ := strconv.Atoi(c.Query("limit", "20"))
 
-	shelves, total, err := dao.DB_GetShelves(rackId, activeOnly, page, limit)
+	shelves, total, err := dao.DB_GetShelves(branchId, rackId, activeOnly, page, limit)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch shelves"})
 	}
@@ -167,6 +185,10 @@ func ActivateShelf(c *fiber.Ctx) error {
 }
 
 func GetShelvesByRackID(c *fiber.Ctx) error {
+	branchId, err := ResolveBranchId(c, c.Query("branchId"))
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized or missing branchId"})
+	}
 	rackId := c.Params("rackId")
 	activeOnly := c.Query("activeOnly") == "true"
 	
@@ -174,7 +196,7 @@ func GetShelvesByRackID(c *fiber.Ctx) error {
 	page := 1
 	limit := 1000 
 
-	shelves, _, err := dao.DB_GetShelves(rackId, activeOnly, page, limit)
+	shelves, _, err := dao.DB_GetShelves(branchId, rackId, activeOnly, page, limit)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch shelves"})
 	}
@@ -193,6 +215,11 @@ func CreateLocation(c *fiber.Ctx) error {
 	if location.RackId == "" || location.ShelfId == "" || location.Position <= 0 {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "RackId, ShelfId, and valid Position (>0) are required"})
 	}
+	branchId, err := ResolveBranchId(c, location.BranchId)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized or missing branchId"})
+	}
+	location.BranchId = branchId
 	location.IsActive = true
 	location.IsOccupied = false
 
@@ -203,6 +230,10 @@ func CreateLocation(c *fiber.Ctx) error {
 }
 
 func GetLocations(c *fiber.Ctx) error {
+	branchId, err := ResolveBranchId(c, c.Query("branchId"))
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized or missing branchId"})
+	}
 	rackId := c.Query("rackId")
 	shelfId := c.Query("shelfId")
 	searchCode := c.Query("code")
@@ -210,7 +241,7 @@ func GetLocations(c *fiber.Ctx) error {
 	page, _ := strconv.Atoi(c.Query("page", "1"))
 	limit, _ := strconv.Atoi(c.Query("limit", "20"))
 
-	locations, total, err := dao.DB_GetLocations(rackId, shelfId, searchCode, activeOnly, page, limit)
+	locations, total, err := dao.DB_GetLocations(branchId, rackId, shelfId, searchCode, activeOnly, page, limit)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch locations"})
 	}
@@ -264,6 +295,10 @@ func ActivateLocation(c *fiber.Ctx) error {
 }
 
 func GetLocationsByShelfID(c *fiber.Ctx) error {
+	branchId, err := ResolveBranchId(c, c.Query("branchId"))
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized or missing branchId"})
+	}
 	shelfId := c.Params("shelfId")
 	activeOnly := c.Query("activeOnly") == "true"
 	
@@ -271,7 +306,7 @@ func GetLocationsByShelfID(c *fiber.Ctx) error {
 	page := 1
 	limit := 1000 
 
-	locations, _, err := dao.DB_GetLocations("", shelfId, "", activeOnly, page, limit)
+	locations, _, err := dao.DB_GetLocations(branchId, "", shelfId, "", activeOnly, page, limit)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch locations"})
 	}
@@ -291,7 +326,11 @@ func GetLocationsByShelfID(c *fiber.Ctx) error {
 //
 // GET /api/warehouse/map
 func GetWarehouseMap(c *fiber.Ctx) error {
-	tree, err := dao.DB_GetWarehouseMap()
+	branchId, err := ResolveBranchId(c, c.Query("branchId"))
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized or missing branchId"})
+	}
+	tree, err := dao.DB_GetWarehouseMap(branchId)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Failed to build warehouse map: " + err.Error(),
