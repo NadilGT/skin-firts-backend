@@ -61,9 +61,9 @@ func GenerateBillPDF(bill dto.BillModel, medicineNames map[string]string) ([]byt
 	pdf.Ln(4)
 
 	// ── Items Table Header ───────────────────────────────────────────────────
-	// Columns: #  |  Medicine Name  |  Qty  |  Unit Price  |  Subtotal
+	// Columns: #  |  Item / Service  |  Qty  |  Unit Price  |  Subtotal
 	colW := []float64{10, 95, 20, 30, 30}
-	headers := []string{"#", "Medicine", "Qty", "Unit Price", "Subtotal"}
+	headers := []string{"#", "Item / Service", "Qty", "Unit Price", "Subtotal"}
 	aligns := []string{"C", "L", "C", "R", "R"}
 
 	pdf.SetFillColor(30, 50, 100)
@@ -80,6 +80,7 @@ func GenerateBillPDF(bill dto.BillModel, medicineNames map[string]string) ([]byt
 		name     string
 		qty      int
 		price    float64
+		subtotal float64
 	}
 	// Preserve order and merge duplicates
 	var order []string
@@ -91,28 +92,37 @@ func GenerateBillPDF(bill dto.BillModel, medicineNames map[string]string) ([]byt
 		}
 		if _, exists := seen[item.MedicineID]; !exists {
 			order = append(order, item.MedicineID)
-			seen[item.MedicineID] = &consolidatedItem{name: name, qty: 0, price: item.Price}
+			seen[item.MedicineID] = &consolidatedItem{name: name, qty: 0, price: item.Price, subtotal: 0}
 		}
 		seen[item.MedicineID].qty += item.Quantity
+		seen[item.MedicineID].subtotal += item.Price * float64(item.Quantity)
+	}
+
+	for _, srv := range bill.Services {
+		if _, exists := seen[srv.ServiceID]; !exists {
+			order = append(order, srv.ServiceID)
+			seen[srv.ServiceID] = &consolidatedItem{name: srv.ServiceName, qty: 0, price: srv.UnitPrice, subtotal: 0}
+		}
+		seen[srv.ServiceID].qty += srv.Quantity
+		seen[srv.ServiceID].subtotal += srv.Total
 	}
 
 	pdf.SetTextColor(30, 30, 30)
 	pdf.SetFont("Helvetica", "", 9)
 
-	for idx, medID := range order {
-		ci := seen[medID]
+	for idx, id := range order {
+		ci := seen[id]
 		if idx%2 == 0 {
 			pdf.SetFillColor(248, 250, 255)
 		} else {
 			pdf.SetFillColor(255, 255, 255)
 		}
-		subtotal := ci.price * float64(ci.qty)
 		row := []string{
 			fmt.Sprintf("%d", idx+1),
 			ci.name,
 			fmt.Sprintf("%d", ci.qty),
 			fmt.Sprintf("%.2f", ci.price),
-			fmt.Sprintf("%.2f", subtotal),
+			fmt.Sprintf("%.2f", ci.subtotal),
 		}
 		for i, cell := range row {
 			pdf.CellFormat(colW[i], 7, cell, "1", 0, aligns[i], true, 0, "")
@@ -133,11 +143,16 @@ func GenerateBillPDF(bill dto.BillModel, medicineNames map[string]string) ([]byt
 		bold  bool
 	}{
 		{"Medicine Subtotal:", bill.TotalMedicinePrice, false},
+		{"Services Subtotal:", bill.TotalServicePrice, false},
 		{"Additional Charges:", bill.AdditionalCharges, false},
 		{"Grand Total:", bill.GrandTotal, true},
 	}
 
 	for _, t := range totals {
+		// Only show totals that are > 0 to keep bill clean (except Grand Total)
+		if t.value == 0 && !t.bold && t.label != "Medicine Subtotal:" {
+			continue
+		}
 		if t.bold {
 			pdf.SetFont("Helvetica", "B", 11)
 			pdf.SetFillColor(30, 50, 100)

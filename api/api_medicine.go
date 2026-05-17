@@ -538,7 +538,31 @@ func CreateBill(c *fiber.Ctx) error {
 	}
 
 	// Calculate totals
-	grandTotal := totalMedicinePrice + additionalCharges
+	var allServiceItems []dto.HospitalBillItem
+	var totalServicePrice float64
+
+	for _, srv := range req.Services {
+		// Fetch from DB to ensure pricing and names are authentic
+		dbService, err := dao.DB_GetServiceByServiceId(srv.ServiceID)
+		if err != nil {
+			// If we fail on item N, we MUST rollback reservations for items 1 to N-1
+			if len(allBillItems) > 0 {
+				dao.DB_RevertStockReservation(allBillItems)
+			}
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": fmt.Sprintf("Failed to prepare bill: Service not found for ID %s", srv.ServiceID),
+			})
+		}
+		
+		srv.ServiceName = dbService.Name
+		srv.UnitPrice = dbService.UnitPrice
+		srv.Total = float64(srv.Quantity) * dbService.UnitPrice
+
+		allServiceItems = append(allServiceItems, srv)
+		totalServicePrice += srv.Total
+	}
+
+	grandTotal := totalMedicinePrice + totalServicePrice + additionalCharges
 	discount := req.Discount
 	tax := req.Tax
 	netTotal := grandTotal - discount + tax
@@ -561,7 +585,9 @@ func CreateBill(c *fiber.Ctx) error {
 		BillId:             billId,
 		PatientID:          patientID,
 		Items:              allBillItems,
+		Services:           allServiceItems,
 		TotalMedicinePrice: totalMedicinePrice,
+		TotalServicePrice:  totalServicePrice,
 		AdditionalCharges:  additionalCharges,
 		GrandTotal:         grandTotal,
 		Discount:           discount,

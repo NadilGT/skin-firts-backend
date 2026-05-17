@@ -118,6 +118,7 @@ type SearchMedicineQuery struct {
 }
 type CreateBillRequest struct {
 	Items         []DeductStockRequest `json:"items"`
+	Services      []HospitalBillItem   `json:"services"`
 	CustomerName  string               `json:"customerName"`
 	CustomerPhone string               `json:"customerPhone"`
 	Discount      float64              `json:"discount"`
@@ -131,17 +132,21 @@ type CreateBillRequest struct {
 }
 
 type BillResponse struct {
-	Items              []BillItem `json:"items"`
-	TotalMedicinePrice float64    `json:"totalMedicinePrice"`
-	AdditionalCharges  float64    `json:"additionalCharges"`
-	GrandTotal         float64    `json:"grandTotal"`
+	Items              []BillItem         `json:"items"`
+	Services           []HospitalBillItem `json:"services"`
+	TotalMedicinePrice float64            `json:"totalMedicinePrice"`
+	TotalServicePrice  float64            `json:"totalServicePrice"`
+	AdditionalCharges  float64            `json:"additionalCharges"`
+	GrandTotal         float64            `json:"grandTotal"`
 }
 type BillModel struct {
 	ID                 primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
 	BillId             string             `json:"billId" bson:"billId"`
 	PatientID          string             `json:"patientId,omitempty" bson:"patientId,omitempty"`
 	Items              []BillItem         `json:"items" bson:"items"`
+	Services           []HospitalBillItem `json:"services,omitempty" bson:"services,omitempty"`
 	TotalMedicinePrice float64            `json:"totalMedicinePrice" bson:"totalMedicinePrice"`
+	TotalServicePrice  float64            `json:"totalServicePrice" bson:"totalServicePrice"`
 	AdditionalCharges  float64            `json:"additionalCharges" bson:"additionalCharges"`
 	GrandTotal         float64            `json:"grandTotal" bson:"grandTotal"`
 	Status             string             `json:"status" bson:"status"` // PENDING, CONFIRMED, FAILED
