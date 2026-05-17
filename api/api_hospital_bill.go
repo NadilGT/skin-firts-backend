@@ -115,7 +115,7 @@ func CreateHospitalBill(c *fiber.Ctx) error {
 			"error": "Failed to generate PDF: " + err.Error(),
 		})
 	}
-	
+
 	// Convert raw PDF bytes to Base64
 	pdfBase64 := base64.StdEncoding.EncodeToString(pdfBytes)
 
@@ -205,9 +205,9 @@ func ConfirmHospitalBill(c *fiber.Ctx) error {
 	})
 }
 
-// GetHospitalBillsReport returns a filtered list of hospital bills along with the total sum of their totalAmount
+// GetHospitalBillsReport returns a filtered list of bills (previously hospital bills) along with the total sum of their netTotal
 func GetHospitalBillsReport(c *fiber.Ctx) error {
-	var query dto.SearchHospitalBillQuery
+	var query dto.SearchBillQuery
 	if err := c.QueryParser(&query); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid query parameters"})
 	}
@@ -222,6 +222,9 @@ func GetHospitalBillsReport(c *fiber.Ctx) error {
 		query.From = d
 		query.To = d
 	}
+	if doctorId := c.Query("doctorId"); doctorId != "" {
+		query.DoctorId = doctorId
+	}
 
 	branchId, err := ResolveBranchId(c, query.BranchId)
 	if err != nil {
@@ -229,7 +232,8 @@ func GetHospitalBillsReport(c *fiber.Ctx) error {
 	}
 	query.BranchId = branchId
 
-	bills, total, totalAmount, err := dao.DB_SearchHospitalBillsReport(query)
+	// In the future you could add a filter here to only return bills with services
+	bills, total, totalAmount, err := dao.DB_SearchPharmacyBillsReport(query)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch hospital bills report: " + err.Error()})
 	}

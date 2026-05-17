@@ -164,6 +164,9 @@ func GetBillsReport(c *fiber.Ctx) error {
 		query.From = d
 		query.To = d
 	}
+	if doctorId := c.Query("doctorId"); doctorId != "" {
+		query.DoctorId = doctorId
+	}
 
 	branchId, err := ResolveBranchId(c, query.BranchId)
 	if err != nil {

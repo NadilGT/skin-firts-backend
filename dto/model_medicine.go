@@ -7,46 +7,46 @@ import (
 )
 
 type MedicineModel struct {
-	ID                   primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
-	MedicineId           string             `json:"MedicineId" bson:"medicineid"`
-	Name                 string             `json:"name" bson:"name"`
-	GenericName          string             `json:"genericName" bson:"genericName"`
-	Manufacturer         string             `json:"manufacturer" bson:"manufacturer"`
-	Category             string             `json:"category" bson:"category"`
-	Dosage               string             `json:"dosage" bson:"dosage"`
-	Form                 string             `json:"form" bson:"form"`
-	Strength             string             `json:"strength" bson:"strength"`
-	MinStockLevel        int                `json:"minStockLevel" bson:"minStockLevel"`
+	ID            primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
+	MedicineId    string             `json:"MedicineId" bson:"medicineid"`
+	Name          string             `json:"name" bson:"name"`
+	GenericName   string             `json:"genericName" bson:"genericName"`
+	Manufacturer  string             `json:"manufacturer" bson:"manufacturer"`
+	Category      string             `json:"category" bson:"category"`
+	Dosage        string             `json:"dosage" bson:"dosage"`
+	Form          string             `json:"form" bson:"form"`
+	Strength      string             `json:"strength" bson:"strength"`
+	MinStockLevel int                `json:"minStockLevel" bson:"minStockLevel"`
 	// Extended fields
-	Barcode              string             `json:"barcode,omitempty" bson:"barcode,omitempty"`
-	SupplierId           string             `json:"supplierId,omitempty" bson:"supplierId,omitempty"`
-	ReorderLevel         int                `json:"reorderLevel" bson:"reorderLevel"` // alias of minStockLevel for UI clarity
-	Description          string             `json:"description" bson:"description"`
-	SideEffects          []string           `json:"sideEffects,omitempty" bson:"sideEffects,omitempty"`
-	Contraindications    []string           `json:"contraindications,omitempty" bson:"contraindications,omitempty"`
-	PrescriptionRequired bool               `json:"prescriptionRequired" bson:"prescriptionRequired"`
-	Status               string             `json:"status" bson:"status"`
-	CreatedAt            time.Time          `json:"createdAt" bson:"createdAt"`
-	UpdatedAt            time.Time          `json:"updatedAt" bson:"updatedAt"`
+	Barcode              string    `json:"barcode,omitempty" bson:"barcode,omitempty"`
+	SupplierId           string    `json:"supplierId,omitempty" bson:"supplierId,omitempty"`
+	ReorderLevel         int       `json:"reorderLevel" bson:"reorderLevel"` // alias of minStockLevel for UI clarity
+	Description          string    `json:"description" bson:"description"`
+	SideEffects          []string  `json:"sideEffects,omitempty" bson:"sideEffects,omitempty"`
+	Contraindications    []string  `json:"contraindications,omitempty" bson:"contraindications,omitempty"`
+	PrescriptionRequired bool      `json:"prescriptionRequired" bson:"prescriptionRequired"`
+	Status               string    `json:"status" bson:"status"`
+	CreatedAt            time.Time `json:"createdAt" bson:"createdAt"`
+	UpdatedAt            time.Time `json:"updatedAt" bson:"updatedAt"`
 }
 
 // MedicineBatch is a GLOBAL concept — one shipment from a supplier.
 // It has NO quantity, NO branch. It describes what the batch IS.
 type MedicineBatch struct {
 	ID           primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
-	BatchId      string             `json:"batchId" bson:"batchId"`       // BAT-XXXX
-	MedicineId   string             `json:"medicineId" bson:"medicineId"` // FK → Medicine
+	BatchId      string             `json:"batchId" bson:"batchId"`         // BAT-XXXX
+	MedicineId   string             `json:"medicineId" bson:"medicineId"`   // FK → Medicine
 	BatchNumber  string             `json:"batchNumber" bson:"batchNumber"` // physical label e.g. "B2024-001"
 	ExpiryDate   time.Time          `json:"expiryDate" bson:"expiryDate"`
 	BuyingPrice  float64            `json:"buyingPrice" bson:"buyingPrice"`
 	SellingPrice float64            `json:"sellingPrice" bson:"sellingPrice"`
 	SupplierId   string             `json:"supplierId,omitempty" bson:"supplierId,omitempty"`
-	
+
 	// Location mappings
-	LocationId   string             `json:"locationId" bson:"locationId"`
-	LocationCode string             `json:"locationCode,omitempty" bson:"locationCode,omitempty"`
-	RackName     string             `json:"rackName,omitempty" bson:"rackName,omitempty"`
-	ShelfName    string             `json:"shelfName,omitempty" bson:"shelfName,omitempty"`
+	LocationId   string `json:"locationId" bson:"locationId"`
+	LocationCode string `json:"locationCode,omitempty" bson:"locationCode,omitempty"`
+	RackName     string `json:"rackName,omitempty" bson:"rackName,omitempty"`
+	ShelfName    string `json:"shelfName,omitempty" bson:"shelfName,omitempty"`
 
 	// Status: ACTIVE | EXPIRED | DAMAGED | QUARANTINED
 	Status    string    `json:"status" bson:"status"`
@@ -58,8 +58,8 @@ type MedicineBatch struct {
 // Every branch that holds stock from a given batch gets its own BranchStock document.
 type BranchStock struct {
 	ID               primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
-	StockId          string             `json:"stockId" bson:"stockId"`     // STK-XXXX
-	BatchId          string             `json:"batchId" bson:"batchId"`     // FK → MedicineBatch.BatchId
+	StockId          string             `json:"stockId" bson:"stockId"`       // STK-XXXX
+	BatchId          string             `json:"batchId" bson:"batchId"`       // FK → MedicineBatch.BatchId
 	MedicineId       string             `json:"medicineId" bson:"medicineId"` // denormalized for query speed
 	BranchId         string             `json:"branchId" bson:"branchId"`
 	Quantity         int                `json:"quantity" bson:"quantity"`
@@ -129,6 +129,8 @@ type CreateBillRequest struct {
 	BranchId      string  `json:"branchId"`
 	Notes         string  `json:"notes"`
 	CreatedBy     string  `json:"createdBy"`
+	DoctorID      string  `json:"doctorId"`
+	DoctorName    string  `json:"doctorName"`
 }
 
 type BillResponse struct {
@@ -143,6 +145,8 @@ type BillModel struct {
 	ID                 primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
 	BillId             string             `json:"billId" bson:"billId"`
 	PatientID          string             `json:"patientId,omitempty" bson:"patientId,omitempty"`
+	DoctorID           string             `json:"doctorId,omitempty" bson:"doctorId,omitempty"`
+	DoctorName         string             `json:"doctorName,omitempty" bson:"doctorName,omitempty"`
 	Items              []BillItem         `json:"items" bson:"items"`
 	Services           []HospitalBillItem `json:"services,omitempty" bson:"services,omitempty"`
 	TotalMedicinePrice float64            `json:"totalMedicinePrice" bson:"totalMedicinePrice"`
@@ -177,6 +181,7 @@ type UpdateBillPaymentRequest struct {
 
 type SearchBillQuery struct {
 	BranchId      string `json:"branchId" query:"branchId"`
+	DoctorId      string `json:"doctorId" query:"doctorId"`
 	PaymentStatus string `json:"paymentStatus" query:"paymentStatus"`
 	Status        string `json:"status" query:"status"`
 	From          string `json:"from" query:"from"`

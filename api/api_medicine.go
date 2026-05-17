@@ -584,6 +584,8 @@ func CreateBill(c *fiber.Ctx) error {
 		ID:                 primitive.NewObjectID(),
 		BillId:             billId,
 		PatientID:          patientID,
+		DoctorID:           req.DoctorID,
+		DoctorName:         req.DoctorName,
 		Items:              allBillItems,
 		Services:           allServiceItems,
 		TotalMedicinePrice: totalMedicinePrice,

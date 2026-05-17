@@ -22,6 +22,9 @@ func DB_SearchPharmacyBills(query dto.SearchBillQuery) ([]dto.BillModel, int64, 
 	if query.BranchId != "" {
 		filter["branchId"] = query.BranchId
 	}
+	if query.DoctorId != "" {
+		filter["doctorId"] = query.DoctorId
+	}
 	if query.PaymentStatus != "" {
 		filter["paymentStatus"] = query.PaymentStatus
 	}
@@ -140,8 +143,8 @@ func DB_GetDailySalesSummary(branchId, date string) (*dto.DailySalesSummary, err
 	pipeline := mongo.Pipeline{
 		bson.D{{Key: "$match", Value: matchFilter}},
 		bson.D{{Key: "$group", Value: bson.M{
-			"_id":        nil,
-			"totalBills": bson.M{"$sum": 1},
+			"_id":          nil,
+			"totalBills":   bson.M{"$sum": 1},
 			"totalRevenue": bson.M{"$sum": "$netTotal"},
 			"cashRevenue": bson.M{"$sum": bson.M{
 				"$cond": []interface{}{bson.M{"$eq": []interface{}{"$paymentMethod", "CASH"}}, "$paidAmount", 0},
@@ -313,6 +316,9 @@ func DB_SearchPharmacyBillsReport(query dto.SearchBillQuery) ([]dto.BillModel, i
 
 	if query.BranchId != "" {
 		filter["branchId"] = query.BranchId
+	}
+	if query.DoctorId != "" {
+		filter["doctorId"] = query.DoctorId
 	}
 	if query.PaymentStatus != "" {
 		filter["paymentStatus"] = query.PaymentStatus

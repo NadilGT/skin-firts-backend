@@ -252,9 +252,9 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 	app.Get("/reports/expiry", authMiddleware.ValidateToken, BranchMiddleware, api.GetExpiryReport)
 	app.Get("/reports/stock", authMiddleware.ValidateToken, BranchMiddleware, api.GetStockReportAnalytics)
 	
+
 	app.Get("/billing/reports/bills", authMiddleware.ValidateToken, BranchMiddleware, api.GetBillsReport)
 	app.Get("/billing/reports/hospital-bills", authMiddleware.ValidateToken, BranchMiddleware, api.GetHospitalBillsReport)
-
 	// ========== DASHBOARD ANALYTICS (chart time-series, branch-scoped) ==========
 	// GET /analytics/appointments?branchId=&days=7  → []{ date, count }
 	// GET /analytics/revenue?branchId=&days=7       → []{ date, totalRevenue }
