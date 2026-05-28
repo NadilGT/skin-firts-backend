@@ -11,7 +11,7 @@ type JWTClaims struct {
 	UserId   string   `json:"userId"`
 	Role     string   `json:"role"`
 	Roles    []string `json:"roles"`
-	BranchId string   `json:"branchId"`
+	BranchIds []string `json:"branchIds"`
 	Email    string   `json:"email"`
 	jwt.RegisteredClaims
 }
@@ -34,7 +34,7 @@ type RegisterRequest struct {
 	Password    string `json:"password"`
 	PhoneNumber string `json:"phoneNumber"`
 	Role        string `json:"role"`
-	BranchId    string `json:"branchId"`
+	BranchIds   []string `json:"branchIds"`
 }
 
 // ChangePasswordRequest is the body for POST /auth/change-password.
@@ -60,7 +60,7 @@ type AuthUserResponse struct {
 	Name              string `json:"name"`
 	Email             string `json:"email"`
 	Role              string `json:"role"`
-	BranchId          string `json:"branchId,omitempty"`
+	BranchIds         []string `json:"branchIds,omitempty"`
 	Status            string `json:"status"`
 	MustChangePassword bool  `json:"mustChangePassword"`
 }

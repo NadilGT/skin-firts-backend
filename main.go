@@ -22,7 +22,7 @@ func main() {
 
 	app.Use(cors.New(cors.Config{
 		AllowOrigins: "http://localhost:3000,http://localhost:5173,http://localhost:8080,https://med-center-hub.vercel.app,https://medical.nadildinsara.me,https://*.vercel.app,https://medical-portal.codekongsl.com",
-		AllowHeaders: "Origin, Content-Type, Accept, Authorization",
+		AllowHeaders: "Origin, Content-Type, Accept, Authorization, X-Branch-Id",
 		AllowMethods: "GET, POST, PUT, DELETE, PATCH",
 	}))
 

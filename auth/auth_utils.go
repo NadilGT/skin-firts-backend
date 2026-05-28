@@ -37,18 +37,18 @@ func CheckPassword(hash, plain string) bool {
 
 // GenerateJWT mints a signed 24-hour access token.
 // The JWT_SECRET env var is read at call time so hot-reloads work in dev.
-func GenerateJWT(userId, role, branchId, email string, roles []string) (string, error) {
+func GenerateJWT(userId, role string, branchIds []string, email string, roles []string) (string, error) {
 	secret := os.Getenv("JWT_SECRET")
 	if secret == "" {
 		return "", errors.New("JWT_SECRET is not configured")
 	}
 
 	claims := JWTClaims{
-		UserId:   userId,
-		Role:     role,
-		Roles:    roles,
-		BranchId: branchId,
-		Email:    email,
+		UserId:    userId,
+		Role:      role,
+		Roles:     roles,
+		BranchIds: branchIds,
+		Email:     email,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),

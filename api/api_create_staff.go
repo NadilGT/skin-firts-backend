@@ -17,7 +17,7 @@ type CreateStaffRequest struct {
 	Password    string `json:"password"`    // admin provides the initial password
 	PhoneNumber string `json:"phoneNumber"`
 	Role        string `json:"role"`     // "admin" | "doctor" | "staff" | etc.
-	BranchId    string `json:"branchId"`
+	BranchIds   []string `json:"branchIds"`
 }
 
 // StaffHandler handles staff creation and search.
@@ -53,13 +53,21 @@ func (h *StaffHandler) CreateStaffAccount(c *fiber.Ctx) error {
 		})
 	}
 
-	branchId, err := ResolveBranchId(c, req.BranchId)
-	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": err.Error(),
-		})
+	// For CreateStaffRequest we now support multiple branches, but ResolveBranchId might need a single ID.
+	// For now we trust the BranchIds array passed or set a default if empty.
+	var finalBranchIds []string
+	if len(req.BranchIds) > 0 {
+		finalBranchIds = req.BranchIds
+	} else {
+		// Fallback to resolve a default branch
+		branchId, err := ResolveBranchId(c, "")
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": err.Error(),
+			})
+		}
+		finalBranchIds = []string{branchId}
 	}
-	req.BranchId = branchId
 
 	// Hash the provided password
 	passwordHash, err := auth.HashPassword(req.Password)
@@ -85,7 +93,7 @@ func (h *StaffHandler) CreateStaffAccount(c *fiber.Ctx) error {
 				PasswordHash:       passwordHash,
 				PhoneNumber:        req.PhoneNumber,
 				Role:               req.Role,
-				BranchId:           req.BranchId,
+				BranchIds:          finalBranchIds,
 				Status:             dto.StatusActive,
 				MustChangePassword: true, // force change on first login
 				CreatedAt:          now,
@@ -103,7 +111,7 @@ func (h *StaffHandler) CreateStaffAccount(c *fiber.Ctx) error {
 				PasswordHash:       passwordHash,
 				PhoneNumber:        req.PhoneNumber,
 				Role:               req.Role,
-				BranchId:           req.BranchId,
+				BranchIds:          finalBranchIds,
 				Status:             dto.StatusActive,
 				MustChangePassword: true,
 				CreatedAt:          now,
@@ -121,7 +129,7 @@ func (h *StaffHandler) CreateStaffAccount(c *fiber.Ctx) error {
 				PasswordHash:       passwordHash,
 				PhoneNumber:        req.PhoneNumber,
 				Role:               req.Role,
-				BranchId:           req.BranchId,
+				BranchIds:          finalBranchIds,
 				Status:             dto.StatusActive,
 				MustChangePassword: true,
 				CreatedAt:          now,
@@ -141,7 +149,7 @@ func (h *StaffHandler) CreateStaffAccount(c *fiber.Ctx) error {
 		"userId":             dbUserID,
 		"email":              req.Email,
 		"role":               req.Role,
-		"branchId":           req.BranchId,
+		"branchIds":          finalBranchIds,
 		"mustChangePassword": true,
 		"note":               "Staff must change their password on first login",
 	})

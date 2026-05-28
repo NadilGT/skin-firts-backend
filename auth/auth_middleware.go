@@ -15,7 +15,7 @@ import (
 //   - "email"    — user's email
 //   - "role"     — primary role string
 //   - "roles"    — []string of all roles
-//   - "branchId" — assigned branch
+//   - "branchIds"— assigned branches array
 func JWTMiddleware() fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		authHeader := c.Get("Authorization")
@@ -45,7 +45,7 @@ func JWTMiddleware() fiber.Handler {
 		c.Locals("email", claims.Email)
 		c.Locals("role", claims.Role)
 		c.Locals("roles", claims.Roles)
-		c.Locals("branchId", claims.BranchId)
+		c.Locals("branchIds", claims.BranchIds)
 
 		return c.Next()
 	}

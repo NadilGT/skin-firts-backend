@@ -12,7 +12,7 @@ import (
 
 // Login accepts email + password, verifies against MongoDB, and returns a JWT.
 //
-// Response: { token, user: { id, name, email, role, branchId, status, mustChangePassword } }
+// Response: { token, user: { id, name, email, role, branchIds, status, mustChangePassword } }
 func Login(c *fiber.Ctx) error {
 	var req LoginRequest
 	if err := c.BodyParser(&req); err != nil {
@@ -55,7 +55,7 @@ func Login(c *fiber.Ctx) error {
 		})
 	}
 
-	token, err := GenerateJWT(user.UserId, user.Role, user.BranchId, user.Email, user.Roles)
+	token, err := GenerateJWT(user.UserId, user.Role, user.BranchIds, user.Email, user.Roles)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Failed to generate token",
@@ -69,7 +69,7 @@ func Login(c *fiber.Ctx) error {
 			Name:               user.Name,
 			Email:              user.Email,
 			Role:               user.Role,
-			BranchId:           user.BranchId,
+			BranchIds:          user.BranchIds,
 			Status:             user.Status,
 			MustChangePassword: user.MustChangePassword,
 		},
@@ -97,7 +97,7 @@ func Register(c *fiber.Ctx) error {
 		})
 	}
 
-	token, err := GenerateJWT(user.UserId, user.Role, user.BranchId, user.Email, user.Roles)
+	token, err := GenerateJWT(user.UserId, user.Role, user.BranchIds, user.Email, user.Roles)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "User created but failed to generate token",
@@ -111,7 +111,7 @@ func Register(c *fiber.Ctx) error {
 			Name:               user.Name,
 			Email:              user.Email,
 			Role:               user.Role,
-			BranchId:           user.BranchId,
+			BranchIds:          user.BranchIds,
 			Status:             user.Status,
 			MustChangePassword: user.MustChangePassword,
 		},
@@ -127,7 +127,7 @@ func Register(c *fiber.Ctx) error {
 func Me(c *fiber.Ctx) error {
 	userId, _ := c.Locals("userId").(string)
 	email, _ := c.Locals("email").(string)
-	branchId, _ := c.Locals("branchId").(string)
+	branchIds, _ := c.Locals("branchIds").([]string)
 	role, _ := c.Locals("role").(string)
 	roles, _ := c.Locals("roles").([]string)
 
@@ -143,7 +143,7 @@ func Me(c *fiber.Ctx) error {
 		"userId":       userId,
 		"uid":          userId, // backward-compat alias
 		"email":        email,
-		"branchId":     branchId,
+		"branchIds":    branchIds,
 		"role":         role,
 		"roles":        roles,
 		"isSuperAdmin": isSuperAdmin,

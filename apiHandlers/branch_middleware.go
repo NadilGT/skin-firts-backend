@@ -24,14 +24,38 @@ func BranchMiddleware(c *fiber.Ctx) error {
 		}
 	}
 
-	branchId, _ := c.Locals("branchId").(string)
-	if branchId == "" {
+	// For multi-branch users, determine the active branch:
+	// 1. Check X-Branch-Id header
+	// 2. Fallback to the first branch in the branchIds array
+	branchIds, ok := c.Locals("branchIds").([]string)
+	if !ok || len(branchIds) == 0 {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
-			"error": "Branch not assigned to this user. Contact your administrator.",
+			"error": "No branches assigned to this user. Contact your administrator.",
 		})
 	}
 
-	c.Locals("branchFilter", bson.M{"branchId": branchId})
-	c.Locals("effectiveBranchId", branchId)
+	activeBranchId := c.Get("X-Branch-Id")
+	if activeBranchId == "" {
+		activeBranchId = branchIds[0] // Default to the first branch
+	}
+
+	// Validate that the requested activeBranchId is in the user's branchIds array
+	isValidBranch := false
+	for _, id := range branchIds {
+		if id == activeBranchId {
+			isValidBranch = true
+			break
+		}
+	}
+
+	if !isValidBranch {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+			"error": "You do not have access to the requested branch.",
+		})
+	}
+
+	c.Locals("branchId", activeBranchId) // for downstream handlers
+	c.Locals("branchFilter", bson.M{"branchId": activeBranchId})
+	c.Locals("effectiveBranchId", activeBranchId)
 	return c.Next()
 }

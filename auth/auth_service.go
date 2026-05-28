@@ -29,7 +29,7 @@ type FoundUser struct {
 	PasswordHash       string
 	Role               string
 	Roles              []string
-	BranchId           string
+	BranchIds          []string
 	Status             string
 	MustChangePassword bool
 	Collection         string // which collection the user lives in
@@ -50,7 +50,7 @@ func FindUserByEmail(email string) (*FoundUser, error) {
 		Email              string `bson:"email"`
 		PasswordHash       string `bson:"passwordHash"`
 		Role               string `bson:"role"`
-		BranchId           string `bson:"branchId"`
+		BranchIds          []string `bson:"branchIds"`
 		Status             string `bson:"status"`
 		MustChangePassword bool   `bson:"mustChangePassword"`
 	}
@@ -81,7 +81,7 @@ func FindUserByEmail(email string) (*FoundUser, error) {
 				PasswordHash:       raw.PasswordHash,
 				Role:               raw.Role,
 				Roles:              roles,
-				BranchId:           raw.BranchId,
+				BranchIds:          raw.BranchIds,
 				Status:             status,
 				MustChangePassword: raw.MustChangePassword,
 				Collection:         entry.name,
@@ -134,7 +134,7 @@ func RegisterUser(req RegisterRequest) (*FoundUser, error) {
 			PasswordHash:       hash,
 			PhoneNumber:        req.PhoneNumber,
 			Role:               req.Role,
-			BranchId:           req.BranchId,
+			BranchIds:          req.BranchIds,
 			Status:             "ACTIVE",
 			MustChangePassword: false,
 			CreatedAt:          now,
@@ -144,7 +144,7 @@ func RegisterUser(req RegisterRequest) (*FoundUser, error) {
 		}
 		return &FoundUser{
 			UserId: userID, Name: req.Name, Email: req.Email,
-			Role: req.Role, Roles: []string{req.Role}, BranchId: req.BranchId,
+			Role: req.Role, Roles: []string{req.Role}, BranchIds: req.BranchIds,
 			Status: "ACTIVE", MustChangePassword: false, Collection: "admin_users",
 		}, nil
 
@@ -160,7 +160,7 @@ func RegisterUser(req RegisterRequest) (*FoundUser, error) {
 			PasswordHash:       hash,
 			PhoneNumber:        req.PhoneNumber,
 			Role:               req.Role,
-			BranchId:           req.BranchId,
+			BranchIds:          req.BranchIds,
 			Status:             "ACTIVE",
 			MustChangePassword: false,
 			CreatedAt:          now,
@@ -170,7 +170,7 @@ func RegisterUser(req RegisterRequest) (*FoundUser, error) {
 		}
 		return &FoundUser{
 			UserId: userID, Name: req.Name, Email: req.Email,
-			Role: req.Role, Roles: []string{req.Role}, BranchId: req.BranchId,
+			Role: req.Role, Roles: []string{req.Role}, BranchIds: req.BranchIds,
 			Status: "ACTIVE", MustChangePassword: false, Collection: "doctor_users",
 		}, nil
 
@@ -212,7 +212,7 @@ func RegisterUser(req RegisterRequest) (*FoundUser, error) {
 			PasswordHash:       hash,
 			PhoneNumber:        req.PhoneNumber,
 			Role:               req.Role,
-			BranchId:           req.BranchId,
+			BranchIds:          req.BranchIds,
 			Status:             "ACTIVE",
 			MustChangePassword: false,
 			CreatedAt:          now,
@@ -222,7 +222,7 @@ func RegisterUser(req RegisterRequest) (*FoundUser, error) {
 		}
 		return &FoundUser{
 			UserId: userID, Name: req.Name, Email: req.Email,
-			Role: req.Role, Roles: []string{req.Role}, BranchId: req.BranchId,
+			Role: req.Role, Roles: []string{req.Role}, BranchIds: req.BranchIds,
 			Status: "ACTIVE", MustChangePassword: false, Collection: "staff_users",
 		}, nil
 	}
@@ -270,7 +270,7 @@ func InitializeSuperAdmin() {
 		Email:              email,
 		PasswordHash:       hash,
 		Role:               "super_admin",
-		BranchId:           "BRN-001",
+		BranchIds:          []string{"BRN-001"},
 		Status:             "ACTIVE",
 		MustChangePassword: false,
 		CreatedAt:          time.Now(),
@@ -282,4 +282,23 @@ func InitializeSuperAdmin() {
 	}
 
 	log.Printf("✅ Super admin created successfully: %s (ID=%s)\n", email, userID)
+
+	// Create default main branch if it doesn't exist
+	branch, _ := dao.DB_GetBranchByBranchId("BRN-001")
+	if branch == nil {
+		now := time.Now()
+		mainBranch := dto.BranchModel{
+			BranchId:     "BRN-001",
+			Name:         "Main Branch",
+			IsMainBranch: true,
+			Status:       "ACTIVE",
+			CreatedAt:    &now,
+			UpdatedAt:    &now,
+		}
+		if err := dao.DB_CreateBranch(mainBranch); err != nil {
+			log.Println("⚠️  Failed to create default Main Branch (BRN-001):", err)
+		} else {
+			log.Println("✅ Default Main Branch (BRN-001) created successfully")
+		}
+	}
 }

@@ -15,7 +15,7 @@ import (
 type RoleAssignmentRequest struct {
 	Email    string   `json:"email"`
 	Roles    []string `json:"roles"`
-	BranchId string   `json:"branchId"`
+	BranchIds []string `json:"branchIds"`
 }
 
 // RoleAssignmentHandler handles role management via MongoDB.
@@ -29,7 +29,7 @@ func NewRoleAssignmentHandler(_ ...interface{}) *RoleAssignmentHandler {
 // POST /admin/assign-roles
 // ---------------------------------------------------------------------------
 
-// AssignRoles updates a user's role and branchId in MongoDB.
+// AssignRoles updates a user's role and branchIds in MongoDB.
 // The user is identified by email across all 4 user collections.
 func (h *RoleAssignmentHandler) AssignRoles(c *fiber.Ctx) error {
 	var req RoleAssignmentRequest
@@ -48,7 +48,7 @@ func (h *RoleAssignmentHandler) AssignRoles(c *fiber.Ctx) error {
 	// Use the first role as the primary role
 	primaryRole := req.Roles[0]
 
-	if err := dao.DB_UpdateUserRoleAndBranch(req.Email, primaryRole, req.BranchId); err != nil {
+	if err := dao.DB_UpdateUserRoleAndBranches(req.Email, primaryRole, req.BranchIds); err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 			"error": err.Error(),
 		})
@@ -58,7 +58,7 @@ func (h *RoleAssignmentHandler) AssignRoles(c *fiber.Ctx) error {
 		"message":  "Roles assigned successfully",
 		"email":    req.Email,
 		"roles":    req.Roles,
-		"branchId": req.BranchId,
+		"branchIds": req.BranchIds,
 		"note":     "Changes take effect on next login (new JWT issued)",
 	})
 }
@@ -127,7 +127,7 @@ func (h *RoleAssignmentHandler) RemoveRoles(c *fiber.Ctx) error {
 		})
 	}
 
-	if err := dao.DB_UpdateUserRoleAndBranch(email, "", ""); err != nil {
+	if err := dao.DB_UpdateUserRoleAndBranches(email, "", []string{}); err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 			"error": err.Error(),
 		})

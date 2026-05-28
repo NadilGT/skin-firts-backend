@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"lawyerSL-Backend/auth"
 	"lawyerSL-Backend/dao"
 	"lawyerSL-Backend/dto"
 	"lawyerSL-Backend/utils"
@@ -83,7 +84,20 @@ func DeleteBranch(c *fiber.Ctx) error {
 
 func GetBranchContext(c *fiber.Ctx) error {
 	role, _ := c.Locals("role").(string)
-	jwtBranchId, _ := c.Locals("branchId").(string)
+	jwtBranchIds, _ := c.Locals("branchIds").([]string)
+	email, _ := c.Locals("email").(string)
+
+	// Fetch live user data to get the most up-to-date branchIds from the database locally
+	if email != "" {
+		if liveUser, err := auth.FindUserByEmail(email); err == nil {
+			if len(liveUser.BranchIds) > 0 {
+				jwtBranchIds = liveUser.BranchIds
+			}
+			if liveUser.Role != "" {
+				role = liveUser.Role
+			}
+		}
+	}
 
 	isSuperAdmin := false
 	if roles, ok := c.Locals("roles").([]string); ok {
@@ -112,7 +126,7 @@ func GetBranchContext(c *fiber.Ctx) error {
 	response := BranchContextResponse{
 		Role:            role,
 		Branches:        []dto.BranchModel{},
-		CanSelectBranch: isSuperAdmin,
+		CanSelectBranch: isSuperAdmin || len(jwtBranchIds) > 1, // Let users with >1 branch select
 	}
 
 	if isSuperAdmin {
@@ -139,16 +153,37 @@ func GetBranchContext(c *fiber.Ctx) error {
 		response.DefaultBranchId = defaultBranch.BranchId
 		response.CurrentBranch = defaultBranch
 	} else {
-		branch, err := dao.DB_GetBranchByBranchId(jwtBranchId)
-		if err != nil || branch == nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "User's branch not found"})
+		if len(jwtBranchIds) == 0 {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "User has no assigned branches"})
 		}
-		if branch.Status != "ACTIVE" {
-			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "User's branch is not ACTIVE"})
+		
+		for _, bId := range jwtBranchIds {
+			branch, err := dao.DB_GetBranchByBranchId(bId)
+			if err == nil && branch != nil && branch.Status == "ACTIVE" {
+				response.Branches = append(response.Branches, *branch)
+			}
 		}
-		response.Branches = append(response.Branches, *branch)
-		response.DefaultBranchId = branch.BranchId
-		response.CurrentBranch = branch
+
+		if len(response.Branches) == 0 {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "User has no ACTIVE branches"})
+		}
+		
+		// Determine which branch is active right now
+		activeBranchId := c.Get("X-Branch-Id")
+		if activeBranchId == "" {
+			activeBranchId = response.Branches[0].BranchId
+		}
+		
+		response.DefaultBranchId = response.Branches[0].BranchId
+		for i := range response.Branches {
+			if response.Branches[i].BranchId == activeBranchId {
+				response.CurrentBranch = &response.Branches[i]
+				break
+			}
+		}
+		if response.CurrentBranch == nil {
+			response.CurrentBranch = &response.Branches[0]
+		}
 	}
 
 	return c.Status(fiber.StatusOK).JSON(response)

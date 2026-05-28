@@ -56,7 +56,7 @@ func CreateAdminUser(c *fiber.Ctx) error {
 		PasswordHash:       passwordHash,
 		PhoneNumber:        req.PhoneNumber,
 		Role:               dto.RoleAdmin,
-		BranchId:           req.BranchId,
+		BranchIds:          req.BranchIds,
 		Status:             dto.StatusActive,
 		MustChangePassword: false,
 		CreatedAt:          time.Now(),
@@ -75,7 +75,7 @@ func CreateAdminUser(c *fiber.Ctx) error {
 		"name":     admin.Name,
 		"email":    admin.Email,
 		"role":     admin.Role,
-		"branchId": admin.BranchId,
+		"branchIds": admin.BranchIds,
 		"status":   admin.Status,
 	})
 }

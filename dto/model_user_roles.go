@@ -55,7 +55,7 @@ type DoctorUser struct {
 	PasswordHash       string    `json:"-"           bson:"passwordHash"` // NEVER serialised to JSON
 	PhoneNumber        string    `json:"phoneNumber" bson:"phoneNumber"`
 	Role               string    `json:"role"        bson:"role"`
-	BranchId           string    `json:"branchId,omitempty" bson:"branchId,omitempty"`
+	BranchIds          []string  `json:"branchIds,omitempty" bson:"branchIds,omitempty"`
 	Status             string    `json:"status"      bson:"status"`
 	MustChangePassword bool      `json:"mustChangePassword" bson:"mustChangePassword"`
 	CreatedAt          time.Time `json:"createdAt"   bson:"createdAt"`
@@ -70,7 +70,7 @@ type AdminUser struct {
 	PasswordHash       string    `json:"-"           bson:"passwordHash"` // NEVER serialised to JSON
 	PhoneNumber        string    `json:"phoneNumber" bson:"phoneNumber"`
 	Role               string    `json:"role"        bson:"role"`
-	BranchId           string    `json:"branchId,omitempty" bson:"branchId,omitempty"`
+	BranchIds          []string  `json:"branchIds,omitempty" bson:"branchIds,omitempty"`
 	Status             string    `json:"status"      bson:"status"`
 	MustChangePassword bool      `json:"mustChangePassword" bson:"mustChangePassword"`
 	CreatedAt          time.Time `json:"createdAt"   bson:"createdAt"`
@@ -85,7 +85,7 @@ type StaffUser struct {
 	PasswordHash       string    `json:"-"           bson:"passwordHash"` // NEVER serialised to JSON
 	PhoneNumber        string    `json:"phoneNumber" bson:"phoneNumber"`
 	Role               string    `json:"role"        bson:"role"`
-	BranchId           string    `json:"branchId,omitempty" bson:"branchId,omitempty"`
+	BranchIds          []string  `json:"branchIds,omitempty" bson:"branchIds,omitempty"`
 	Status             string    `json:"status"      bson:"status"`
 	MustChangePassword bool      `json:"mustChangePassword" bson:"mustChangePassword"`
 	CreatedAt          time.Time `json:"createdAt"   bson:"createdAt"`
@@ -99,12 +99,12 @@ type StaffUser struct {
 // endpoints (/register/patient, /register/doctor-user, /register/admin).
 // FirebaseUID kept as omitempty for backward-compat with existing frontends.
 type RegisterUserRequest struct {
-	FirebaseUID string `json:"firebaseUid,omitempty"`
-	Name        string `json:"name"`
-	Email       string `json:"email"`
-	Password    string `json:"password"`
-	PhoneNumber string `json:"phoneNumber"`
-	BranchId    string `json:"branchId,omitempty"`
+	FirebaseUID string   `json:"firebaseUid,omitempty"`
+	Name        string   `json:"name"`
+	Email       string   `json:"email"`
+	Password    string   `json:"password,omitempty"`
+	PhoneNumber string   `json:"phoneNumber"`
+	BranchIds   []string `json:"branchIds,omitempty"`
 }
 
 // SearchStaffQuery represents the query parameters for searching staff.
@@ -125,7 +125,7 @@ type StaffMember struct {
 	Email       string    `json:"email"       bson:"email"`
 	PhoneNumber string    `json:"phoneNumber" bson:"phoneNumber"`
 	Role        string    `json:"role"        bson:"role"`
-	BranchId    string    `json:"branchId,omitempty" bson:"branchId,omitempty"`
+	BranchIds   []string  `json:"branchIds,omitempty" bson:"branchIds,omitempty"`
 	Status      string    `json:"status"      bson:"status"`
 	CreatedAt   time.Time `json:"createdAt"   bson:"createdAt"`
 }

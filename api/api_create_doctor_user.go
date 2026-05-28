@@ -56,7 +56,7 @@ func CreateDoctorUserAccount(c *fiber.Ctx) error {
 		PasswordHash:       passwordHash,
 		PhoneNumber:        req.PhoneNumber,
 		Role:               dto.RoleDoctor,
-		BranchId:           req.BranchId,
+		BranchIds:          req.BranchIds,
 		Status:             dto.StatusActive,
 		MustChangePassword: false,
 		CreatedAt:          time.Now(),
@@ -73,7 +73,7 @@ func CreateDoctorUserAccount(c *fiber.Ctx) error {
 		"name":     doctorUser.Name,
 		"email":    doctorUser.Email,
 		"role":     doctorUser.Role,
-		"branchId": doctorUser.BranchId,
+		"branchIds": doctorUser.BranchIds,
 		"status":   doctorUser.Status,
 	})
 }

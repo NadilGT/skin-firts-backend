@@ -87,9 +87,9 @@ func DB_ClearMustChangePassword(email, collection string) error {
 // DB_UpdateUserRoleAndBranch — update role + branchId for a user by email
 // ---------------------------------------------------------------------------
 
-// DB_UpdateUserRoleAndBranch updates the role and branchId for a user across
+// DB_UpdateUserRoleAndBranches updates the role and branchIds for a user across
 // whichever collection they belong to.  Searches all 4 collections.
-func DB_UpdateUserRoleAndBranch(email, role, branchId string) error {
+func DB_UpdateUserRoleAndBranches(email, role string, branchIds []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -103,7 +103,7 @@ func DB_UpdateUserRoleAndBranch(email, role, branchId string) error {
 		{dbConfigs.PatientCollection, "patients"},
 	}
 
-	update := bson.M{"$set": bson.M{"role": role, "branchId": branchId}}
+	update := bson.M{"$set": bson.M{"role": role, "branchIds": branchIds}}
 
 	for _, entry := range collections {
 		result, err := entry.col.UpdateOne(ctx, bson.M{"email": email}, update)
@@ -158,7 +158,7 @@ type RawUserListing struct {
 	Name      string `bson:"name"      json:"name"`
 	Email     string `bson:"email"     json:"email"`
 	Role      string `bson:"role"      json:"role"`
-	BranchId  string `bson:"branchId"  json:"branchId"`
+	BranchIds []string `bson:"branchIds" json:"branchIds"`
 	Status    string `bson:"status"    json:"status"`
 	CreatedAt string `bson:"createdAt" json:"createdAt"`
 }
