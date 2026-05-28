@@ -154,13 +154,13 @@ func DB_UpdateUserStatus(email, status string) error {
 
 // RawUserListing is a minimal view used for the admin user list endpoint.
 type RawUserListing struct {
-	UserID    string `bson:"userId"    json:"userId"`
-	Name      string `bson:"name"      json:"name"`
-	Email     string `bson:"email"     json:"email"`
-	Role      string `bson:"role"      json:"role"`
-	BranchIds []string `bson:"branchIds" json:"branchIds"`
-	Status    string `bson:"status"    json:"status"`
-	CreatedAt string `bson:"createdAt" json:"createdAt"`
+	UserID    string    `bson:"userId"    json:"userId"`
+	Name      string    `bson:"name"      json:"name"`
+	Email     string    `bson:"email"     json:"email"`
+	Role      string    `bson:"role"      json:"role"`
+	BranchIds []string  `bson:"branchIds" json:"branchIds"`
+	Status    string    `bson:"status"    json:"status"`
+	CreatedAt time.Time `bson:"createdAt" json:"createdAt"`
 }
 
 // DB_ListAllUsers returns a combined user list from all 4 collections.
