@@ -143,9 +143,9 @@ func (h *AppointmentStatusHandler) notifyPatientRescheduled(appointment dto.Appo
 		"queueNumber":     fmt.Sprintf("%d", nextNum),
 	}
 
-	// Save to MongoDB first, then fire FCM push (best-effort)
+	// Save to MongoDB first, then attempt FCM push (best-effort, skipped offline)
 	if err := functions.SaveAndSendNotification(
-		h.FirebaseApp,
+		nil, // firebaseApp not needed in offline mode
 		fcmToken,
 		appointment.PatientID,
 		title,

@@ -10,17 +10,16 @@ import (
 )
 
 // DB_CreateAdminUser inserts a new admin into the "admin_users" collection.
-// It returns an error if a document with the same FirebaseUID already exists.
+// Duplicate check is by email (firebaseUid is optional/legacy).
 func DB_CreateAdminUser(admin dto.AdminUser) error {
 	ctx := context.Background()
 
-	// Prevent duplicate Firebase UID
-	count, err := dbConfigs.AdminUserCollection.CountDocuments(ctx, bson.M{"firebaseUid": admin.FirebaseUID})
+	count, err := dbConfigs.AdminUserCollection.CountDocuments(ctx, bson.M{"email": admin.Email})
 	if err != nil {
 		return err
 	}
 	if count > 0 {
-		return errors.New("an admin with this Firebase UID already exists")
+		return errors.New("an admin with this email already exists")
 	}
 
 	_, err = dbConfigs.AdminUserCollection.InsertOne(ctx, admin)

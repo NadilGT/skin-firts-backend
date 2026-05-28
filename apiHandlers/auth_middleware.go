@@ -1,96 +1,38 @@
 package apiHandlers
 
 import (
-	"context"
-	"lawyerSL-Backend/dto"
-	"strings"
-	"time"
+	"lawyerSL-Backend/auth"
 
-	firebase "firebase.google.com/go/v4"
 	"github.com/gofiber/fiber/v2"
-	"github.com/patrickmn/go-cache"
 )
 
-type AuthMiddleware struct {
-	config      *dto.AuthConfig
-	cache       *cache.Cache
-	firebaseApp *firebase.App
+// AuthMiddleware wraps the local JWT middleware, replacing the old Firebase
+// token verification.  All Fiber Locals set by auth.JWTMiddleware() remain
+// identical to the old Firebase middleware so no downstream handler changes
+// are needed:
+//
+//	c.Locals("userId", ...)    — app-level user ID
+//	c.Locals("uid", ...)       — backward-compat alias for userId
+//	c.Locals("email", ...)
+//	c.Locals("role", ...)      — primary role
+//	c.Locals("roles", ...)     — []string of all roles
+//	c.Locals("branchId", ...)
+type AuthMiddleware struct{}
+
+// NewAuthMiddleware constructs an AuthMiddleware. The authConfig and any
+// legacy firebase parameters are ignored — kept only for call-site compatibility
+// during transition.
+func NewAuthMiddleware(args ...interface{}) *AuthMiddleware {
+	return &AuthMiddleware{}
 }
 
-func NewAuthMiddleware(config dto.AuthConfig, firebaseApp *firebase.App) *AuthMiddleware {
-	return &AuthMiddleware{
-		config:      &config,
-		cache:       cache.New(5*time.Minute, 10*time.Minute),
-		firebaseApp: firebaseApp,
-	}
-}
-
+// ValidateToken is the Fiber middleware handler. Delegates to auth.JWTMiddleware.
 func (a *AuthMiddleware) ValidateToken(c *fiber.Ctx) error {
-	ctx := context.Background()
-
-	client, err := a.firebaseApp.Auth(ctx)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"message": "Failed to init Firebase"})
-	}
-
-	authHeader := c.Get("Authorization")
-	parts := strings.Split(authHeader, " ")
-	if len(parts) != 2 || parts[0] != "Bearer" {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"message": "Missing/invalid auth header"})
-	}
-
-	idToken := parts[1]
-	token, err := client.VerifyIDToken(ctx, idToken)
-	if err != nil {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"message": "Invalid token"})
-	}
-
-	c.Locals("uid", token.UID)
-	if email, ok := token.Claims["email"].(string); ok {
-		c.Locals("email", email)
-	}
-
-	// Extract branchId from token claims (set by AssignRoles)
-	if branchId, ok := token.Claims["branchId"].(string); ok {
-		c.Locals("branchId", branchId)
-	}
-
-	// Extract roles array and also set the primary role
-	if roles, ok := token.Claims["roles"].([]interface{}); ok {
-		var rolesStr []string
-		for _, r := range roles {
-			if role, ok := r.(string); ok {
-				rolesStr = append(rolesStr, role)
-			}
-		}
-		c.Locals("roles", rolesStr)
-		// Set first role as the primary role for convenience
-		if len(rolesStr) > 0 {
-			c.Locals("role", rolesStr[0])
-		}
-	}
-
-	return c.Next()
+	return auth.JWTMiddleware()(c)
 }
 
-// Example Role Enforcement Middleware
+// RequiresRole is kept here as a convenience re-export so existing router.go
+// call sites (RequiresRole("admin")) continue to compile unchanged.
 func RequiresRole(requiredRole string) fiber.Handler {
-	return func(c *fiber.Ctx) error {
-		rolesInterface := c.Locals("roles")
-		if rolesInterface == nil {
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Roles not found in context"})
-		}
-		roles, ok := rolesInterface.([]string)
-		if !ok {
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid roles format"})
-		}
-
-		for _, role := range roles {
-			// Super admin has access to everything
-			if role == "super_admin" || role == requiredRole {
-				return c.Next()
-			}
-		}
-		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Access denied. Required role: " + requiredRole})
-	}
+	return auth.RequiresRole(requiredRole)
 }

@@ -6,61 +6,39 @@ import (
 	"log"
 	"time"
 
-	firebase "firebase.google.com/go/v4"
-	"firebase.google.com/go/v4/messaging"
 	"lawyerSL-Backend/dao"
 	"lawyerSL-Backend/dto"
+
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
-// SendFCMNotification sends a push notification to a single device token.
-// It uses the already-initialised Firebase app passed in from main.
-// If the token is empty the function logs a warning and returns nil (not an error).
-func SendFCMNotification(firebaseApp *firebase.App, token string, title string, body string, data map[string]string) error {
+// SendFCMNotification is a no-op in local/offline mode.
+// FCM requires an active internet connection and Firebase project.
+// Notifications are still SAVED to MongoDB (notifications collection) for
+// in-app polling by the Flutter client.
+func SendFCMNotification(firebaseApp interface{}, token string, title string, body string, data map[string]string) error {
 	if token == "" {
-		log.Println("⚠️  FCM: device token is empty – skipping notification")
+		log.Println("ℹ️  FCM: device token is empty — notification saved to DB only (offline mode)")
 		return nil
 	}
-
-	ctx := context.Background()
-	client, err := firebaseApp.Messaging(ctx)
-	if err != nil {
-		return fmt.Errorf("FCM: failed to get messaging client: %w", err)
-	}
-
-	message := &messaging.Message{
-		Token: token,
-		Notification: &messaging.Notification{
-			Title: title,
-			Body:  body,
-		},
-		Data: data, // optional key-value payload for the Flutter app
-	}
-
-	msgID, err := client.Send(ctx, message)
-	if err != nil {
-		return fmt.Errorf("FCM: send failed: %w", err)
-	}
-
-	log.Printf("✅ FCM: notification sent successfully (id=%s)", msgID)
+	// In offline mode: just log and skip
+	log.Printf("ℹ️  FCM: offline mode — skipping push to token [%s...]. Notification saved to DB.", truncateToken(token))
 	return nil
 }
 
-// SaveAndSendNotification is the single internal helper the backend calls
-// whenever it needs to notify a user.
-//
-// Flow: MongoDB save (guaranteed) → FCM send (best-effort, logged on failure)
+// SaveAndSendNotification persists the notification to MongoDB then attempts
+// an FCM push (best-effort, silently skipped in offline mode).
 //
 // Parameters:
-//   - firebaseApp : the initialised Firebase app
-//   - fcmToken    : device token (empty = skip FCM, still saves to DB)
-//   - userID      : Firebase UID of the recipient
+//   - firebaseApp : ignored in offline mode (kept for call-site compatibility)
+//   - fcmToken    : device token (empty or ignored in offline mode)
+//   - userID      : app-level user ID of the recipient
 //   - title       : notification title
-//   - body        : notification body
+//   - body        : notification body text
 //   - notifType   : e.g. "REPORT_READY", "APPOINTMENT_CONFIRMED"
 //   - data        : optional key-value payload for the Flutter app
 func SaveAndSendNotification(
-	firebaseApp *firebase.App,
+	firebaseApp interface{},
 	fcmToken string,
 	userID string,
 	title string,
@@ -70,14 +48,14 @@ func SaveAndSendNotification(
 ) error {
 	ctx := context.Background()
 
-	// 1️⃣  Generate a human-readable ID (e.g. NOTIF-001)
+	// 1. Generate a human-readable notification ID
 	notificationId, err := dao.GenerateId(ctx, "notifications", "NOTIF")
 	if err != nil {
 		notificationId = fmt.Sprintf("NOTIF-%d", time.Now().UnixNano())
 		log.Printf("⚠️  Notification ID counter failed, using fallback: %s", notificationId)
 	}
 
-	// 2️⃣  Persist to MongoDB FIRST — data is never lost even if FCM fails
+	// 2. Persist to MongoDB FIRST — never lost even if FCM fails or is offline
 	notification := dto.NotificationModel{
 		ID:             primitive.NewObjectID(),
 		NotificationID: notificationId,
@@ -96,16 +74,15 @@ func SaveAndSendNotification(
 
 	log.Printf("✅ Notification saved to DB (id=%s, user=%s)", notificationId, userID)
 
-	// 3️⃣  Send FCM push (best-effort — failure is logged, not fatal)
-	if fcmToken != "" {
-		if err := SendFCMNotification(firebaseApp, fcmToken, title, body, data); err != nil {
-			log.Printf("⚠️  FCM send failed for notification %s: %v", notificationId, err)
-			// We don't return an error here — the notification is already in DB
-		}
-	} else {
-		log.Printf("ℹ️  FCM skipped for notification %s: no device token for user %s", notificationId, userID)
-	}
+	// 3. FCM push — silently skipped in offline mode
+	_ = SendFCMNotification(firebaseApp, fcmToken, title, body, data)
 
 	return nil
 }
 
+func truncateToken(token string) string {
+	if len(token) > 10 {
+		return token[:10]
+	}
+	return token
+}

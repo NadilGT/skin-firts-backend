@@ -1,29 +1,28 @@
 package api
 
 import (
-	"context"
 	"fmt"
-	"io"
 	"lawyerSL-Backend/dao"
 	"lawyerSL-Backend/dto"
 	"lawyerSL-Backend/functions"
+	"os"
 	"path/filepath"
 	"time"
 
-	firebase "firebase.google.com/go/v4"
 	"github.com/gofiber/fiber/v2"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
-type ReportHandler struct {
-	App *firebase.App
-}
+// ReportHandler handles medical report file uploads.
+// In offline mode, files are stored on the local filesystem under ./uploads/reports/
+type ReportHandler struct{}
 
-func NewReportHandler(app *firebase.App) *ReportHandler {
-	return &ReportHandler{App: app}
+func NewReportHandler(_ ...interface{}) *ReportHandler {
+	return &ReportHandler{}
 }
 
 // UploadReport handles POST /api/reports/upload
+// Stores the file locally and saves the metadata to MongoDB.
 func (h *ReportHandler) UploadReport(c *fiber.Ctx) error {
 	// 1. Parse Multipart Form
 	fileHeader, err := c.FormFile("report")
@@ -45,67 +44,38 @@ func (h *ReportHandler) UploadReport(c *fiber.Ctx) error {
 		})
 	}
 
-	// 2. Upload to Firebase Storage
-	file, err := fileHeader.Open()
-	if err != nil {
+	// 2. Save file to local disk: ./uploads/reports/<timestamp>_<filename>
+	uploadDir := "./uploads/reports"
+	if err := os.MkdirAll(uploadDir, 0755); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to open uploaded file",
-		})
-	}
-	defer file.Close()
-
-	ctx := context.Background()
-	client, err := h.App.Storage(ctx)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to initialize Firebase Storage client",
+			"error": "Failed to create upload directory: " + err.Error(),
 		})
 	}
 
-	bucket, err := client.DefaultBucket()
-	if err != nil {
+	filename := fmt.Sprintf("%d_%s", time.Now().UnixNano(), fileHeader.Filename)
+	localPath := filepath.Join(uploadDir, filename)
+
+	if err := c.SaveFile(fileHeader, localPath); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to resolve default storage bucket. Check your FIREBASE_STORAGE_BUCKET env variable.",
+			"error": "Failed to save report file: " + err.Error(),
 		})
 	}
 
-	// Generate a unique filename in the 'reports' folder
-	filename := fmt.Sprintf("reports/%d_%s", time.Now().UnixNano(), fileHeader.Filename)
-	obj := bucket.Object(filename)
-	writer := obj.NewWriter(ctx)
-	
-	// Set the file to be publicly accessible
-	writer.ObjectAttrs.PredefinedACL = "publicRead"
-
-	if _, err := io.Copy(writer, file); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to transmit file to cloud storage: " + err.Error(),
-		})
+	// Build the public URL (served via Fiber static or direct path)
+	serverHost := os.Getenv("SERVER_HOST")
+	if serverHost == "" {
+		serverHost = "http://localhost:3000"
 	}
-	
-	if err := writer.Close(); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to properly conclude storage upload: " + err.Error(),
-		})
-	}
+	publicURL := fmt.Sprintf("%s/uploads/reports/%s", serverHost, filename)
 
-	// Construct the public GCS URL
-	bucketAttrs, err := bucket.Attrs(ctx)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to extract bucket metadata: " + err.Error(),
-		})
-	}
-	publicURL := fmt.Sprintf("https://storage.googleapis.com/%s/%s", bucketAttrs.Name, filename)
-
-	// 3. Generate a human-readable Report ID (e.g., REP-001)
+	// 3. Generate a human-readable Report ID
+	ctx := c.Context()
 	reportId, err := dao.GenerateId(ctx, "reports", "REP")
 	if err != nil {
-		// Fallback if ID generator fails, though it shouldn't
 		reportId = "REP-" + fmt.Sprintf("%d", time.Now().Unix())
 	}
 
-	// 4. Create and Save the Report Model
+	// 4. Save Report Model to MongoDB
 	report := dto.ReportModel{
 		ID:            primitive.NewObjectID(),
 		ReportID:      reportId,
@@ -126,12 +96,12 @@ func (h *ReportHandler) UploadReport(c *fiber.Ctx) error {
 		})
 	}
 
-	// 5. Save notification to DB and send FCM push (MongoDB first, FCM second)
+	// 5. Save notification to DB (FCM silently skipped in offline mode)
 	fcmToken, err := dao.DB_GetPatientFCMToken(patientId)
-	if err == nil && fcmToken != "" {
+	if err == nil {
 		go func() {
-			if err := functions.SaveAndSendNotification(
-				h.App,
+			_ = functions.SaveAndSendNotification(
+				nil,
 				fcmToken,
 				patientId,
 				"Report Ready 📄",
@@ -142,14 +112,12 @@ func (h *ReportHandler) UploadReport(c *fiber.Ctx) error {
 					"reportId":  reportId,
 					"patientId": patientId,
 				},
-			); err != nil {
-				fmt.Printf("⚠️  Notification pipeline failed: %v\n", err)
-			}
+			)
 		}()
 	}
 
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
-		"message":   "Report uploaded and patient notified successfully",
+		"message":   "Report uploaded successfully",
 		"reportId":  reportId,
 		"fileUrl":   publicURL,
 		"patientId": patientId,

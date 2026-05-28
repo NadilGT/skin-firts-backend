@@ -2,38 +2,37 @@ package api
 
 import (
 	"context"
-	"fmt"
+	"lawyerSL-Backend/auth"
 	"lawyerSL-Backend/dao"
 	"lawyerSL-Backend/dto"
-	"lawyerSL-Backend/utils"
-	"log"
 	"time"
 
-	"firebase.google.com/go/v4"
-	"firebase.google.com/go/v4/auth"
 	"github.com/gofiber/fiber/v2"
 )
 
+// CreateStaffRequest is the body for POST /admin/create-staff.
 type CreateStaffRequest struct {
 	Name        string `json:"name"`
 	Email       string `json:"email"`
+	Password    string `json:"password"`    // admin provides the initial password
 	PhoneNumber string `json:"phoneNumber"`
-	Role        string `json:"role"` // "admin", "doctor", "cashier", "receptionist", etc.
+	Role        string `json:"role"`     // "admin" | "doctor" | "staff" | etc.
 	BranchId    string `json:"branchId"`
 }
 
-type StaffHandler struct {
-	firebaseApp *firebase.App
+// StaffHandler handles staff creation and search.
+type StaffHandler struct{}
+
+func NewStaffHandler(_ ...interface{}) *StaffHandler {
+	return &StaffHandler{}
 }
 
-func NewStaffHandler(app *firebase.App) *StaffHandler {
-	return &StaffHandler{firebaseApp: app}
-}
-
-// POST /admin/create-staff
-// Super Admin only: Creates a Firebase Auth user, assigns custom claims (role),
-// sends a password reset email to set their own password, and saves the user
-// data into the corresponding database collection.
+// CreateStaffAccount handles POST /admin/create-staff.
+// Admin provides email + password + role.  Password is bcrypt-hashed and
+// stored in MongoDB.  No Firebase involvement.
+//
+// The MustChangePassword flag is set to true so the frontend can force the
+// staff member to change their password on first login.
 func (h *StaffHandler) CreateStaffAccount(c *fiber.Ctx) error {
 	var req CreateStaffRequest
 	if err := c.BodyParser(&req); err != nil {
@@ -44,7 +43,13 @@ func (h *StaffHandler) CreateStaffAccount(c *fiber.Ctx) error {
 
 	if req.Email == "" || req.Name == "" || req.Role == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Email, name, and role are required",
+			"error": "email, name, and role are required",
+		})
+	}
+
+	if req.Password == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "password is required (admin provides the initial password for the account)",
 		})
 	}
 
@@ -56,73 +61,16 @@ func (h *StaffHandler) CreateStaffAccount(c *fiber.Ctx) error {
 	}
 	req.BranchId = branchId
 
+	// Hash the provided password
+	passwordHash, err := auth.HashPassword(req.Password)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to hash password",
+		})
+	}
+
 	ctx := context.Background()
-	client, err := h.firebaseApp.Auth(ctx)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to connect to Firebase Auth"})
-	}
-
-	// 1. Create the user in Firebase Auth with a default random password
-	defaultPassword := "TeMp@123!" // The user will be forced to change it via the password reset email
-	params := (&auth.UserToCreate{}).
-		Email(req.Email).
-		Password(defaultPassword).
-		DisplayName(req.Name)
-
-	if req.PhoneNumber != "" {
-		params = params.PhoneNumber(req.PhoneNumber)
-	}
-
-	fwUser, err := client.CreateUser(ctx, params)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": fmt.Sprintf("Failed to create Firebase Auth user: %v", err)})
-	}
-
-	// 2. Assign Custom Claims (Role and BranchId)
-	claims := map[string]interface{}{
-		"roles": []string{req.Role},
-	}
-	if req.BranchId != "" {
-		claims["branchId"] = req.BranchId
-	}
-
-	if err := client.SetCustomUserClaims(ctx, fwUser.UID, claims); err != nil {
-		// Rollback Auth user creation if we can't set claims
-		_ = client.DeleteUser(ctx, fwUser.UID)
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to assign roles. User creation rolled back."})
-	}
-
-	// 3. Generate Password Reset Link and Send Email
-	log.Printf("[CreateStaff] Generating password reset link for %s…", req.Email)
-	resetLink, err := client.PasswordResetLink(ctx, req.Email)
-	if err != nil {
-		log.Printf("[CreateStaff] ⚠️ Failed to generate password reset link: %v", err)
-		// We won't rollback here — user was created but link could not be generated
-	} else {
-		log.Printf("[CreateStaff] ✅ Password reset link generated. Now sending email to %s…", req.Email)
-
-		// Send email synchronously so any error is visible in Render logs
-		emailSubject := "Welcome to the Med Center Portal - Set up your account"
-		emailBody := fmt.Sprintf(`
-			<h2>Hello %s!</h2>
-			<p>An account has been created for you as a <strong>%s</strong>.</p>
-			<p>Please click the link below to set your password and access the portal:</p>
-			<a href="%s" style="padding:10px 15px;background-color:#007bff;color:white;text-decoration:none;border-radius:5px;">Set Password</a>
-			<br><br>
-			<p>If the button doesn't work, copy and paste this link into your browser:</p>
-			<p>%s</p>
-			<br>
-			<p>Thanks,<br>Management Team</p>
-		`, req.Name, req.Role, resetLink, resetLink)
-
-		if emailErr := utils.SendEmail([]string{req.Email}, emailSubject, emailBody); emailErr != nil {
-			log.Printf("[CreateStaff] ❌ Failed to send welcome email to %s: %v", req.Email, emailErr)
-		} else {
-			log.Printf("[CreateStaff] ✅ Welcome email sent to %s", req.Email)
-		}
-	}
-
-	// 4. Save to MongoDB
+	now := time.Now()
 	var dbUserID string
 	var dbErr error
 
@@ -131,14 +79,16 @@ func (h *StaffHandler) CreateStaffAccount(c *fiber.Ctx) error {
 		dbUserID, dbErr = dao.GenerateId(ctx, "admin_users", "AD")
 		if dbErr == nil {
 			admin := dto.AdminUser{
-				UserID:      dbUserID,
-				FirebaseUID: fwUser.UID,
-				Name:        req.Name,
-				Email:       req.Email,
-				PhoneNumber: req.PhoneNumber,
-				Role:        req.Role,
-				BranchId:    req.BranchId,
-				CreatedAt:   time.Now(),
+				UserID:             dbUserID,
+				Name:               req.Name,
+				Email:              req.Email,
+				PasswordHash:       passwordHash,
+				PhoneNumber:        req.PhoneNumber,
+				Role:               req.Role,
+				BranchId:           req.BranchId,
+				Status:             dto.StatusActive,
+				MustChangePassword: true, // force change on first login
+				CreatedAt:          now,
 			}
 			dbErr = dao.DB_CreateAdminUser(admin)
 		}
@@ -147,55 +97,57 @@ func (h *StaffHandler) CreateStaffAccount(c *fiber.Ctx) error {
 		dbUserID, dbErr = dao.GenerateId(ctx, "doctor_users", "DOC")
 		if dbErr == nil {
 			doctor := dto.DoctorUser{
-				UserID:      dbUserID,
-				FirebaseUID: fwUser.UID,
-				Name:        req.Name,
-				Email:       req.Email,
-				PhoneNumber: req.PhoneNumber,
-				Role:        req.Role,
-				BranchId:    req.BranchId,
-				CreatedAt:   time.Now(),
+				UserID:             dbUserID,
+				Name:               req.Name,
+				Email:              req.Email,
+				PasswordHash:       passwordHash,
+				PhoneNumber:        req.PhoneNumber,
+				Role:               req.Role,
+				BranchId:           req.BranchId,
+				Status:             dto.StatusActive,
+				MustChangePassword: true,
+				CreatedAt:          now,
 			}
 			dbErr = dao.DB_CreateDoctorUser(doctor)
 		}
 
-	default: // cashiers, receptionists, other staff
+	default: // cashier, receptionist, pharmacist, staff, etc.
 		dbUserID, dbErr = dao.GenerateId(ctx, "staff_users", "STF")
 		if dbErr == nil {
 			staff := dto.StaffUser{
-				UserID:      dbUserID,
-				FirebaseUID: fwUser.UID,
-				Name:        req.Name,
-				Email:       req.Email,
-				PhoneNumber: req.PhoneNumber,
-				Role:        req.Role,
-				BranchId:    req.BranchId,
-				CreatedAt:   time.Now(),
+				UserID:             dbUserID,
+				Name:               req.Name,
+				Email:              req.Email,
+				PasswordHash:       passwordHash,
+				PhoneNumber:        req.PhoneNumber,
+				Role:               req.Role,
+				BranchId:           req.BranchId,
+				Status:             dto.StatusActive,
+				MustChangePassword: true,
+				CreatedAt:          now,
 			}
 			dbErr = dao.DB_CreateStaffUser(staff)
 		}
 	}
 
 	if dbErr != nil {
-		// Rollback Auth User if DB creation fails
-		_ = client.DeleteUser(ctx, fwUser.UID)
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": fmt.Sprintf("Failed to save user in database: %v. Account creation rolled back.", dbErr),
+		return c.Status(fiber.StatusConflict).JSON(fiber.Map{
+			"error": dbErr.Error(),
 		})
 	}
 
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
-		"message":   "Account successfully created. An email has been sent for password setup.",
-		"userId":    dbUserID,
-		"uid":       fwUser.UID,
-		"email":     req.Email,
-		"role":      req.Role,
-		"resetLink": resetLink, // Note: returning this just for easy local debugging if needed. Can be omitted in prod.
+		"message":            "Staff account created successfully",
+		"userId":             dbUserID,
+		"email":              req.Email,
+		"role":               req.Role,
+		"branchId":           req.BranchId,
+		"mustChangePassword": true,
+		"note":               "Staff must change their password on first login",
 	})
 }
 
-// GET /admin/search-staff
-// Super Admin only: Searches for staff members across all categories with pagination.
+// SearchStaff handles GET /admin/search-staff
 func (h *StaffHandler) SearchStaff(c *fiber.Ctx) error {
 	var query dto.SearchStaffQuery
 	if err := c.QueryParser(&query); err != nil {
@@ -212,7 +164,6 @@ func (h *StaffHandler) SearchStaff(c *fiber.Ctx) error {
 	}
 	query.BranchId = branchId
 
-	// Default pagination
 	if query.Page <= 0 {
 		query.Page = 1
 	}

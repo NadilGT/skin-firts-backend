@@ -8,18 +8,16 @@ import (
 	"log"
 	"time"
 
-	firebase "firebase.google.com/go/v4"
 	"github.com/gofiber/fiber/v2"
 )
 
-// AppointmentStatusHandler holds the Firebase app so it can send FCM notifications.
-type AppointmentStatusHandler struct {
-	FirebaseApp *firebase.App
-}
+// AppointmentStatusHandler handles appointment status changes and notifications.
+// In offline mode, notifications are saved to MongoDB only (no FCM push).
+type AppointmentStatusHandler struct{}
 
-// NewAppointmentStatusHandler creates a handler with the shared Firebase app.
-func NewAppointmentStatusHandler(firebaseApp *firebase.App) *AppointmentStatusHandler {
-	return &AppointmentStatusHandler{FirebaseApp: firebaseApp}
+// NewAppointmentStatusHandler creates an AppointmentStatusHandler.
+func NewAppointmentStatusHandler(_ ...interface{}) *AppointmentStatusHandler {
+	return &AppointmentStatusHandler{}
 }
 
 // UpdateAppointmentStatus handles PATCH /appointments/id/status
@@ -93,9 +91,9 @@ func (h *AppointmentStatusHandler) notifyPatient(appointmentID string, status st
 		"appointmentDate": appointment.AppointmentDate.Format("2006-01-02"),
 	}
 
-	// Save to MongoDB first, then fire FCM push (best-effort)
+	// Save to MongoDB first, then attempt FCM push (best-effort, skipped offline)
 	if err := functions.SaveAndSendNotification(
-		h.FirebaseApp,
+		nil, // firebaseApp not needed in offline mode
 		fcmToken,
 		appointment.PatientID,
 		title,

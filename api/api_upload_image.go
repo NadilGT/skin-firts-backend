@@ -1,24 +1,24 @@
 package api
 
 import (
-	"context"
 	"fmt"
-	"io"
+	"os"
 	"path/filepath"
 	"time"
 
-	firebase "firebase.google.com/go/v4"
 	"github.com/gofiber/fiber/v2"
 )
 
-type ImageUploadHandler struct {
-	App *firebase.App
+// ImageUploadHandler handles image file uploads.
+// In offline mode, images are stored on the local filesystem under ./uploads/images/
+type ImageUploadHandler struct{}
+
+func NewImageUploadHandler(_ ...interface{}) *ImageUploadHandler {
+	return &ImageUploadHandler{}
 }
 
-func NewImageUploadHandler(app *firebase.App) *ImageUploadHandler {
-	return &ImageUploadHandler{App: app}
-}
-
+// UploadImage handles POST /upload/image
+// Saves the image to local disk and returns a publicly accessible URL.
 func (h *ImageUploadHandler) UploadImage(c *fiber.Ctx) error {
 	fileHeader, err := c.FormFile("image")
 	if err != nil {
@@ -27,62 +27,33 @@ func (h *ImageUploadHandler) UploadImage(c *fiber.Ctx) error {
 		})
 	}
 
-	file, err := fileHeader.Open()
-	if err != nil {
+	// Create upload directory if it doesn't exist
+	uploadDir := "./uploads/images"
+	if err := os.MkdirAll(uploadDir, 0755); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to open uploaded image file",
-		})
-	}
-	defer file.Close()
-
-	client, err := h.App.Storage(context.Background())
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to initialize storage client",
+			"error": "Failed to create upload directory: " + err.Error(),
 		})
 	}
 
-	bucket, err := client.DefaultBucket()
-	if err != nil {
+	// Generate unique filename
+	filename := fmt.Sprintf("%d%s", time.Now().UnixNano(), filepath.Ext(fileHeader.Filename))
+	localPath := filepath.Join(uploadDir, filename)
+
+	if err := c.SaveFile(fileHeader, localPath); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to resolve default storage bucket. Check your FIREBASE_STORAGE_BUCKET env variable.",
+			"error": "Failed to save image file: " + err.Error(),
 		})
 	}
 
-	// Generate a unique filename using timestamp
-	filename := fmt.Sprintf("profile_pics/%d%s", time.Now().UnixNano(), filepath.Ext(fileHeader.Filename))
-	
-	obj := bucket.Object(filename)
-	writer := obj.NewWriter(context.Background())
-	
-	// PredefinedACL sets the file to be publicly accessible directly via GCS URL
-	writer.ObjectAttrs.PredefinedACL = "publicRead"
-
-	// Pipe the file chunks right into the cloud!
-	if _, err := io.Copy(writer, file); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to safely transmit chunks to the cloud bucket: " + err.Error(),
-		})
+	// Build the public URL
+	serverHost := os.Getenv("SERVER_HOST")
+	if serverHost == "" {
+		serverHost = "http://localhost:3000"
 	}
-	
-	if err := writer.Close(); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to properly conclude streaming image constraints: " + err.Error(),
-		})
-	}
-
-	// Grab the bucket metadata dynamically to construct the URL
-	bucketAttrs, err := bucket.Attrs(context.Background())
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to extract bucket metadata bounds: " + err.Error(),
-		})
-	}
-
-	publicURL := fmt.Sprintf("https://storage.googleapis.com/%s/%s", bucketAttrs.Name, filename)
+	publicURL := fmt.Sprintf("%s/uploads/images/%s", serverHost, filename)
 
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
-		"message":   "Image transmitted successfully",
+		"message":   "Image uploaded successfully",
 		"image_url": publicURL,
 	})
 }

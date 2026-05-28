@@ -1,43 +1,37 @@
 // apiHandlers/roleAssignment.go
+// Role management — fully MongoDB-based. Firebase dependency removed.
 package apiHandlers
 
 import (
-	"context"
-	"log"
-	"os"
+	"lawyerSL-Backend/dao"
 
-	firebase "firebase.google.com/go/v4"
 	"github.com/gofiber/fiber/v2"
 )
+
+// ---------------------------------------------------------------------------
+// Request / handler types
+// ---------------------------------------------------------------------------
 
 type RoleAssignmentRequest struct {
 	Email    string   `json:"email"`
 	Roles    []string `json:"roles"`
-	BranchId string   `json:"branchId"` // required for all roles except super_admin
+	BranchId string   `json:"branchId"`
 }
 
-type RoleAssignmentHandler struct {
-	firebaseApp *firebase.App
+// RoleAssignmentHandler handles role management via MongoDB.
+type RoleAssignmentHandler struct{}
+
+func NewRoleAssignmentHandler(_ ...interface{}) *RoleAssignmentHandler {
+	return &RoleAssignmentHandler{}
 }
 
-func NewRoleAssignmentHandler(firebaseApp *firebase.App) *RoleAssignmentHandler {
-	return &RoleAssignmentHandler{
-		firebaseApp: firebaseApp,
-	}
-}
+// ---------------------------------------------------------------------------
+// POST /admin/assign-roles
+// ---------------------------------------------------------------------------
 
-// AssignRoles - Assign roles to a user (SUPER ADMIN ONLY - Use carefully!)
+// AssignRoles updates a user's role and branchId in MongoDB.
+// The user is identified by email across all 4 user collections.
 func (h *RoleAssignmentHandler) AssignRoles(c *fiber.Ctx) error {
-	ctx := context.Background()
-
-	// Get Firebase Auth client
-	client, err := h.firebaseApp.Auth(ctx)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to initialize Firebase Auth",
-		})
-	}
-
 	var req RoleAssignmentRequest
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -45,125 +39,72 @@ func (h *RoleAssignmentHandler) AssignRoles(c *fiber.Ctx) error {
 		})
 	}
 
-	// Get user by email
-	user, err := client.GetUserByEmail(ctx, req.Email)
-	if err != nil {
+	if req.Email == "" || len(req.Roles) == 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "email and at least one role are required",
+		})
+	}
+
+	// Use the first role as the primary role
+	primaryRole := req.Roles[0]
+
+	if err := dao.DB_UpdateUserRoleAndBranch(req.Email, primaryRole, req.BranchId); err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-			"error": "User not found",
+			"error": err.Error(),
 		})
 	}
-
-	// Set custom claims with roles + branchId
-	claims := map[string]interface{}{
-		"roles": req.Roles,
-	}
-	if req.BranchId != "" {
-		claims["branchId"] = req.BranchId
-	}
-
-	err = client.SetCustomUserClaims(ctx, user.UID, claims)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to assign roles",
-		})
-	}
-
-	log.Printf("✅ Roles assigned to user %s: %v | branchId: %s", req.Email, req.Roles, req.BranchId)
 
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
 		"message":  "Roles assigned successfully",
 		"email":    req.Email,
 		"roles":    req.Roles,
 		"branchId": req.BranchId,
-		"note":     "User must log out and log back in to get new token with updated claims",
+		"note":     "Changes take effect on next login (new JWT issued)",
 	})
 }
 
-// GetUserRoles - Get current roles for a user
+// ---------------------------------------------------------------------------
+// GET /admin/user-roles?email=xxx
+// ---------------------------------------------------------------------------
+
+// GetUserRoles returns the role and branchId for a user found by email.
 func (h *RoleAssignmentHandler) GetUserRoles(c *fiber.Ctx) error {
-	ctx := context.Background()
-
-	client, err := h.firebaseApp.Auth(ctx)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to initialize Firebase Auth",
-		})
-	}
-
 	email := c.Query("email")
 	if email == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Email query parameter required",
+			"error": "email query parameter is required",
 		})
 	}
 
-	user, err := client.GetUserByEmail(ctx, email)
+	role, found, err := dao.DB_FindAdminRole(email)
 	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Database error",
+		})
+	}
+	if !found {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 			"error": "User not found",
 		})
 	}
 
-	roles := []string{}
-	if user.CustomClaims != nil {
-		if rolesInterface, ok := user.CustomClaims["roles"]; ok {
-			if rolesList, ok := rolesInterface.([]interface{}); ok {
-				for _, role := range rolesList {
-					if roleStr, ok := role.(string); ok {
-						roles = append(roles, roleStr)
-					}
-				}
-			}
-		}
-	}
-
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
 		"email": email,
-		"uid":   user.UID,
-		"roles": roles,
+		"role":  role,
 	})
 }
 
-// ListAllUsers - List all users with their roles
-func (h *RoleAssignmentHandler) ListAllUsers(c *fiber.Ctx) error {
-	ctx := context.Background()
+// ---------------------------------------------------------------------------
+// GET /admin/list-users
+// ---------------------------------------------------------------------------
 
-	client, err := h.firebaseApp.Auth(ctx)
+// ListAllUsers returns a sanitised list of all users from all collections.
+// passwordHash is never included.
+func (h *RoleAssignmentHandler) ListAllUsers(c *fiber.Ctx) error {
+	users, err := dao.DB_ListAllUsers()
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to initialize Firebase Auth",
-		})
-	}
-
-	// List users (max 1000 at a time)
-	iter := client.Users(ctx, "")
-	users := []map[string]interface{}{}
-
-	for {
-		user, err := iter.Next()
-		if err != nil {
-			break
-		}
-
-		roles := []string{}
-		if user.CustomClaims != nil {
-			if rolesInterface, ok := user.CustomClaims["roles"]; ok {
-				if rolesList, ok := rolesInterface.([]interface{}); ok {
-					for _, role := range rolesList {
-						if roleStr, ok := role.(string); ok {
-							roles = append(roles, roleStr)
-						}
-					}
-				}
-			}
-		}
-
-		users = append(users, map[string]interface{}{
-			"uid":         user.UID,
-			"email":       user.Email,
-			"displayName": user.DisplayName,
-			"roles":       roles,
-			"createdAt":   user.UserMetadata.CreationTimestamp,
+			"error": "Failed to list users: " + err.Error(),
 		})
 	}
 
@@ -173,36 +114,22 @@ func (h *RoleAssignmentHandler) ListAllUsers(c *fiber.Ctx) error {
 	})
 }
 
-// RemoveRoles - Remove all roles from a user
+// ---------------------------------------------------------------------------
+// DELETE /admin/remove-roles?email=xxx
+// ---------------------------------------------------------------------------
+
+// RemoveRoles clears the role and branchId for a user (sets to empty string).
 func (h *RoleAssignmentHandler) RemoveRoles(c *fiber.Ctx) error {
-	ctx := context.Background()
-
-	client, err := h.firebaseApp.Auth(ctx)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to initialize Firebase Auth",
-		})
-	}
-
 	email := c.Query("email")
 	if email == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Email query parameter required",
+			"error": "email query parameter is required",
 		})
 	}
 
-	user, err := client.GetUserByEmail(ctx, email)
-	if err != nil {
+	if err := dao.DB_UpdateUserRoleAndBranch(email, "", ""); err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-			"error": "User not found",
-		})
-	}
-
-	// Set empty claims
-	err = client.SetCustomUserClaims(ctx, user.UID, nil)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to remove roles",
+			"error": err.Error(),
 		})
 	}
 
@@ -212,66 +139,40 @@ func (h *RoleAssignmentHandler) RemoveRoles(c *fiber.Ctx) error {
 	})
 }
 
-// InitializeSuperAdmin - One-time setup to create the first admin
-// Call this function when the server starts
-func InitializeSuperAdmin(app *firebase.App) {
-	ctx := context.Background()
+// ---------------------------------------------------------------------------
+// PATCH /admin/user-status
+// ---------------------------------------------------------------------------
 
-	email := os.Getenv("SUPER_ADMIN_EMAIL")
-	if email == "" {
-		log.Println("No super admin email configured")
-		return
+type UpdateStatusRequest struct {
+	Email  string `json:"email"`
+	Status string `json:"status"` // ACTIVE | INACTIVE | SUSPENDED
+}
+
+// UpdateUserStatus allows admins to activate, deactivate or suspend an account.
+func UpdateUserStatus(c *fiber.Ctx) error {
+	var req UpdateStatusRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid request body",
+		})
 	}
 
-	client, err := app.Auth(ctx)
-	if err != nil {
-		log.Println("❌ Failed to initialize Firebase Auth for Super Admin check:", err)
-		return
+	allowed := map[string]bool{"ACTIVE": true, "INACTIVE": true, "SUSPENDED": true}
+	if !allowed[req.Status] {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "status must be ACTIVE, INACTIVE, or SUSPENDED",
+		})
 	}
 
-	user, err := client.GetUserByEmail(ctx, email)
-	if err != nil {
-		log.Printf("⚠️ User not found for super admin (%s). Please sign up first.\n", email)
-		return
+	if err := dao.DB_UpdateUserStatus(req.Email, req.Status); err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"error": err.Error(),
+		})
 	}
 
-	// Check if already has super_admin role and branchId
-	hasSuperAdmin := false
-	hasBranchId := false
-	if user.CustomClaims != nil {
-		log.Printf("🔍 Current Claims for %s: %v\n", email, user.CustomClaims)
-		if rolesInterface, ok := user.CustomClaims["roles"]; ok {
-			if rolesList, ok := rolesInterface.([]interface{}); ok {
-				for _, r := range rolesList {
-					if roleStr, ok := r.(string); ok && roleStr == "super_admin" {
-						hasSuperAdmin = true
-						break
-					}
-				}
-			}
-		}
-		if bid, ok := user.CustomClaims["branchId"].(string); ok && bid == "BRN-001" {
-			hasBranchId = true
-		}
-	} else {
-		log.Printf("🔍 No Custom Claims found for %s\n", email)
-	}
-
-	if hasSuperAdmin && hasBranchId {
-		log.Println("✅ Super admin already authorized with branch BRN-001:", email)
-		return
-	}
-
-	// Force assign super_admin role + branchId
-	log.Printf("⚠️ Updating claims (super_admin + BRN-001) for: %s\n", email)
-	newClaims := map[string]interface{}{
-		"roles":    []string{"super_admin"},
-		"branchId": "BRN-001",
-	}
-	if err := client.SetCustomUserClaims(ctx, user.UID, newClaims); err != nil {
-		log.Println("❌ Failed to set super_admin claims:", err)
-		return
-	}
-
-	log.Println("🚀 Super admin initialized with branch BRN-001 successfully:", email)
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"message": "User status updated",
+		"email":   req.Email,
+		"status":  req.Status,
+	})
 }

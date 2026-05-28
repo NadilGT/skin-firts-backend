@@ -2,60 +2,66 @@ package apiHandlers
 
 import (
 	"lawyerSL-Backend/api"
+	localauth "lawyerSL-Backend/auth"
 
-	firebase "firebase.google.com/go/v4"
 	"github.com/gofiber/fiber/v2"
 )
 
-func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *firebase.App) {
+// SetupRoutes registers all application routes.
+// Firebase dependency is fully removed — all auth is handled by local JWT.
+func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware) {
 	app.Get("/", func(c *fiber.Ctx) error {
-		return c.SendString("Hello from Fiber on Render!")
+		return c.SendString("Hello from Fiber — Local Auth Mode 🔐")
 	})
 
 	// ========== APP DOWNLOAD ROUTE ==========
 	app.Get("/download/app", func(c *fiber.Ctx) error {
-		// Forces the browser to download the APK instead of returning it as text
 		return c.Download("./uploads/app/skin_first_app.apk", "Skin_First.apk")
 	})
 
-	// ========== ROLE MANAGEMENT ROUTES ==========
-	roleHandler := NewRoleAssignmentHandler(firebaseApp)
-	staffHandler := api.NewStaffHandler(firebaseApp)
-	imageUploadHandler := api.NewImageUploadHandler(firebaseApp)
-	appointmentStatusHandler := api.NewAppointmentStatusHandler(firebaseApp)
-	reportHandler := api.NewReportHandler(firebaseApp)
+	// ========== AUTH ROUTES (public) ==========
+	app.Post("/auth/login", localauth.Login)
+	app.Post("/auth/register", localauth.Register)
 
-	// Admin-only role management routes
-	app.Post("/admin/create-staff", authMiddleware.ValidateToken, RequiresRole("admin"), staffHandler.CreateStaffAccount)
-	app.Get("/admin/search-staff", staffHandler.SearchStaff)
-	app.Get("/admin/search-patients", api.SearchPatients)
+	// ========== AUTH ROUTES (protected) ==========
+	app.Get("/auth/me", authMiddleware.ValidateToken, localauth.Me)
+	app.Post("/auth/change-password", authMiddleware.ValidateToken, localauth.ChangePassword)
 
-	// Admin-only role management routes
+	// Admin-only auth management
+	app.Post("/auth/set-password", authMiddleware.ValidateToken, RequiresRole("admin"), localauth.SetPassword)
+
+	// ========== ROLE MANAGEMENT ROUTES (MongoDB-based) ==========
+	roleHandler := NewRoleAssignmentHandler()
+
 	app.Post("/admin/assign-roles", authMiddleware.ValidateToken, RequiresRole("admin"), roleHandler.AssignRoles)
 	app.Get("/admin/user-roles", authMiddleware.ValidateToken, RequiresRole("admin"), roleHandler.GetUserRoles)
 	app.Get("/admin/list-users", authMiddleware.ValidateToken, RequiresRole("admin"), roleHandler.ListAllUsers)
 	app.Delete("/admin/remove-roles", authMiddleware.ValidateToken, RequiresRole("admin"), roleHandler.RemoveRoles)
+	app.Patch("/admin/user-status", authMiddleware.ValidateToken, RequiresRole("admin"), UpdateUserStatus)
+
+	// ========== STAFF MANAGEMENT ==========
+	staffHandler := api.NewStaffHandler()
+	imageUploadHandler := api.NewImageUploadHandler()
+	appointmentStatusHandler := api.NewAppointmentStatusHandler()
+	reportHandler := api.NewReportHandler()
+
+	app.Post("/admin/create-staff", authMiddleware.ValidateToken, RequiresRole("admin"), staffHandler.CreateStaffAccount)
+	app.Get("/admin/search-staff", authMiddleware.ValidateToken, RequiresRole("admin"), staffHandler.SearchStaff)
+	app.Get("/admin/search-patients", authMiddleware.ValidateToken, api.SearchPatients)
 
 	// ========== GLOBAL ASSET ROUTES ==========
 	app.Post("/upload/image", authMiddleware.ValidateToken, imageUploadHandler.UploadImage)
 
 	// ========== USER REGISTRATION ROUTES ==========
-	// Patient registers themselves after Firebase sign-up (public — no token needed here,
-	// but the FirebaseUID in the body ties the record to their auth identity).
+	// These legacy endpoints remain for backward-compat.
+	// New frontends should use POST /auth/register instead.
 	app.Post("/register/patient", api.CreatePatientUser)
-	// Only an existing admin can onboard a new doctor or another admin.
 	app.Post("/register/doctor-user", api.CreateDoctorUserAccount)
 	app.Post("/register/admin", api.CreateAdminUser)
 
 	// ========== ROLE LOOKUP ROUTES ==========
-	// Portal: checks admin_users collection only — returns 404 if user is not an admin.
 	app.Get("/role/admin", api.FindAdminRole)
-	// Mobile app: checks patients + doctor_users collections.
 	app.Get("/role/mobile", api.FindMobileUserRole)
-
-	// ========== AUTH PROFILE ==========
-	// Returns uid, email, branchId, roles from the JWT — useful for frontend after login.
-	app.Get("/auth/me", authMiddleware.ValidateToken, api.GetMyProfile)
 
 	// ========== FOCUS ROUTES ==========
 	app.Post("/focus", authMiddleware.ValidateToken, api.CreateFocus)
@@ -91,7 +97,6 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 	app.Get("/appointments/running/doctorId", api.GetRunningAppointmentNumber)
 	app.Patch("/appointments/id/running", authMiddleware.ValidateToken, BranchMiddleware, RequiresRole("admin"), api.SetAppointmentRunning)
 	app.Post("/create/appointment", authMiddleware.ValidateToken, api.CreateAppointment)
-	// Branch-scoped: admins see their branch; super_admin sees all
 	app.Get("/findAll/appointments", authMiddleware.ValidateToken, BranchMiddleware, api.GetAllAppointments)
 	app.Get("/findAll/appointments/doctor", authMiddleware.ValidateToken, BranchMiddleware, api.GetAppointmentsByDoctorID)
 	app.Get("/findAll/appointments/doctor/ordered", api.GetAppointmentsByDoctorIDSortedByNumber)
@@ -144,23 +149,16 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 	app.Patch("/medicine-orders/:id", api.UpdateMedicineOrderStatus)
 
 	// ========== NEW DOCTOR SCHEDULING ROUTES ==========
-	// Doctor Weekly Schedule
 	app.Post("/doctor-weekly-schedule", authMiddleware.ValidateToken, BranchMiddleware, api.CreateDoctorWeeklySchedule)
 	app.Put("/doctor-weekly-schedule/doctorId", authMiddleware.ValidateToken, BranchMiddleware, api.UpdateDoctorWeeklySchedule)
 	app.Delete("/doctor-weekly-schedule/doctorId", authMiddleware.ValidateToken, BranchMiddleware, api.DeleteDoctorWeeklySchedule)
 	app.Get("/doctor-weekly-schedule", authMiddleware.ValidateToken, BranchMiddleware, api.GetAllDoctorWeeklySchedules)
-	app.Get("/doctor-weekly-schedule/available-dates", api.GetDoctorAvailableDatesForWeek) // Publicly accessible
+	app.Get("/doctor-weekly-schedule/available-dates", api.GetDoctorAvailableDatesForWeek)
 
 	// Doctor Availability
-	app.Get("/doctor-availability/check", api.CheckDoctorAvailability) // Publicly accessible
+	app.Get("/doctor-availability/check", api.CheckDoctorAvailability)
 
 	// ========== DOCTOR DAILY CAPACITY ROUTES (admin-only) ==========
-	// GET  /doctor-daily-capacity         → list all (filter by doctorId, branchId, fromDate, toDate)
-	// GET  /doctor-daily-capacity/single  → single record by doctorId+branchId+date
-	// GET  /doctor-daily-capacity/by-id   → single record by doctorDailyCapacityId+branchId
-	// POST /doctor-daily-capacity         → manually create a record
-	// PUT  /doctor-daily-capacity         → update max/booked by doctorId+branchId+date
-	// DELETE /doctor-daily-capacity       → delete record (date becomes unlimited)
 	app.Get("/doctor-daily-capacity", authMiddleware.ValidateToken, BranchMiddleware, api.GetAllDailyCapacities)
 	app.Get("/doctor-daily-capacity/single", authMiddleware.ValidateToken, BranchMiddleware, api.GetSingleDailyCapacity)
 	app.Get("/doctor-daily-capacity/by-id", authMiddleware.ValidateToken, BranchMiddleware, api.GetDailyCapacityByID)
@@ -173,12 +171,6 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 	app.Get("/api/reports", reportHandler.GetReportsByPatientID)
 
 	// ========== NOTIFICATION ROUTES ==========
-	// Notifications are created INTERNALLY by the backend — not via a public endpoint.
-	// Use functions.SaveAndSendNotification(...) wherever you trigger a notification.
-	//
-	// GET    /api/notifications?userId=&lastId=&limit= → cursor-based pagination (mobile)
-	// PATCH  /api/notifications/:id/read              → mark single as read (mobile)
-	// PATCH  /api/notifications/read-all?userId=      → mark all as read (mobile)
 	app.Get("/api/notifications", authMiddleware.ValidateToken, api.GetNotifications)
 	app.Patch("/api/notifications/:notificationId/read", authMiddleware.ValidateToken, api.MarkNotificationRead)
 	app.Patch("/api/notifications/read-all", authMiddleware.ValidateToken, api.MarkAllNotificationsRead)
@@ -199,8 +191,6 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 	app.Delete("/suppliers/id", authMiddleware.ValidateToken, BranchMiddleware, api.DeleteSupplier)
 
 	// ========== SUPPLIER MEDICINE PRICE (branch-scoped) ==========
-	// Catalogue of agreed unit prices per supplier-medicine pair.
-	// These prices are auto-loaded during Purchase Order creation.
 	app.Post("/supplier-medicine-price", authMiddleware.ValidateToken, BranchMiddleware, api.CreateSupplierMedicinePrice)
 	app.Get("/supplier-medicine-price", authMiddleware.ValidateToken, BranchMiddleware, api.GetSupplierMedicinePrices)
 	app.Get("/supplier-medicine-price/:id", authMiddleware.ValidateToken, BranchMiddleware, api.GetSupplierMedicinePriceByID)
@@ -223,8 +213,7 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 	app.Get("/inventory/stock-valuation", authMiddleware.ValidateToken, BranchMiddleware, api.GetStockValuation)
 	app.Get("/inventory/expiry-alerts", authMiddleware.ValidateToken, BranchMiddleware, api.GetExpiryAlerts)
 	app.Get("/inventory/stock-report", authMiddleware.ValidateToken, BranchMiddleware, api.GetInventoryStockReport)
-	// /inventory/stocks/enriched MUST be registered before /inventory/stocks
-	// so Fiber routes "enriched" as a literal path, not a param.
+	// /inventory/stocks/enriched MUST be before /inventory/stocks
 	app.Get("/inventory/stocks/enriched", authMiddleware.ValidateToken, BranchMiddleware, api.GetBranchStocksEnriched)
 	app.Get("/inventory/stocks", authMiddleware.ValidateToken, BranchMiddleware, api.GetBranchStocks)
 
@@ -251,47 +240,44 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 	app.Get("/reports/profit-margin", authMiddleware.ValidateToken, BranchMiddleware, api.GetProfitMarginReport)
 	app.Get("/reports/expiry", authMiddleware.ValidateToken, BranchMiddleware, api.GetExpiryReport)
 	app.Get("/reports/stock", authMiddleware.ValidateToken, BranchMiddleware, api.GetStockReportAnalytics)
-	
 
 	app.Get("/billing/reports/bills", authMiddleware.ValidateToken, BranchMiddleware, api.GetBillsReport)
 	app.Get("/billing/reports/hospital-bills", authMiddleware.ValidateToken, BranchMiddleware, api.GetHospitalBillsReport)
-	// ========== DASHBOARD ANALYTICS (chart time-series, branch-scoped) ==========
-	// GET /analytics/appointments?branchId=&days=7  → []{ date, count }
-	// GET /analytics/revenue?branchId=&days=7       → []{ date, totalRevenue }
-	// GET /analytics/summary?branchId=&days=7       → { totalAppointments, totalRevenue, growthRate }
+
+	// ========== DASHBOARD ANALYTICS (branch-scoped) ==========
 	app.Get("/analytics/appointments", authMiddleware.ValidateToken, BranchMiddleware, api.GetAppointmentsAnalytics)
 	app.Get("/analytics/revenue", authMiddleware.ValidateToken, BranchMiddleware, api.GetRevenueAnalytics)
 	app.Get("/analytics/summary", authMiddleware.ValidateToken, BranchMiddleware, api.GetDashboardSummary)
 
-	// ========== STOCK MOVEMENTS (audit ledger, read-only) ==========
+	// ========== STOCK MOVEMENTS (audit ledger) ==========
 	app.Get("/stock-movements", authMiddleware.ValidateToken, BranchMiddleware, api.GetStockMovements)
 	app.Get("/stock-movements/batch/:batchId", authMiddleware.ValidateToken, BranchMiddleware, api.GetMovementsByBatch)
 
-	// ========== REJECT STOCK (expired / damaged / returns) ==========
+	// ========== REJECT STOCK ==========
 	app.Post("/reject-stock", authMiddleware.ValidateToken, BranchMiddleware, api.CreateRejectStock)
 	app.Get("/reject-stock", authMiddleware.ValidateToken, BranchMiddleware, api.GetRejectStocks)
 	app.Get("/reject-stock/:id", authMiddleware.ValidateToken, BranchMiddleware, api.GetRejectStockByID)
 	app.Patch("/reject-stock/:id/approve", authMiddleware.ValidateToken, BranchMiddleware, RequiresRole("admin"), api.ApproveRejectStock)
 	app.Patch("/reject-stock/:id/execute", authMiddleware.ValidateToken, BranchMiddleware, RequiresRole("admin"), api.ExecuteRejectStock)
 
-	// ========== STOCK ADJUSTMENTS (manual corrections) ==========
+	// ========== STOCK ADJUSTMENTS ==========
 	app.Post("/stock-adjustments", authMiddleware.ValidateToken, BranchMiddleware, api.CreateStockAdjustment)
 	app.Get("/stock-adjustments", authMiddleware.ValidateToken, BranchMiddleware, api.GetStockAdjustments)
 	app.Patch("/stock-adjustments/:id/approve", authMiddleware.ValidateToken, BranchMiddleware, RequiresRole("admin"), api.ApproveStockAdjustment)
 	app.Patch("/stock-adjustments/:id/execute", authMiddleware.ValidateToken, BranchMiddleware, RequiresRole("admin"), api.ExecuteStockAdjustment)
 
-	// ========== SUPPLIER BILLS (invoices) ==========
+	// ========== SUPPLIER BILLS ==========
 	app.Post("/supplier-bills", authMiddleware.ValidateToken, BranchMiddleware, api.CreateSupplierBill)
 	app.Get("/supplier-bills", authMiddleware.ValidateToken, BranchMiddleware, api.GetSupplierBills)
 	app.Get("/supplier-bills/id", authMiddleware.ValidateToken, BranchMiddleware, api.GetSupplierBillByID)
 	app.Patch("/supplier-bills/id/payment", authMiddleware.ValidateToken, BranchMiddleware, api.UpdateSupplierBillPayment)
 
-	// ========== APPROVALS (generic workflow) ==========
+	// ========== APPROVALS ==========
 	app.Get("/approvals", authMiddleware.ValidateToken, BranchMiddleware, api.GetApprovals)
 	app.Patch("/approvals/:id/approve", authMiddleware.ValidateToken, RequiresRole("admin"), api.ApproveRecord)
 	app.Patch("/approvals/:id/reject", authMiddleware.ValidateToken, RequiresRole("admin"), api.RejectRecord)
 
-	// ========== STORAGE MANAGEMENT (Racks/Shelves/Locations) ==========
+	// ========== STORAGE MANAGEMENT ==========
 	app.Post("/api/racks", authMiddleware.ValidateToken, RequiresRole("admin"), api.CreateRack)
 	app.Get("/api/racks", authMiddleware.ValidateToken, api.GetRacks)
 	app.Get("/api/racks/:id", authMiddleware.ValidateToken, api.GetRackByID)
@@ -315,10 +301,9 @@ func SetupRoutes(app *fiber.App, authMiddleware *AuthMiddleware, firebaseApp *fi
 	app.Patch("/api/locations/:id/activate", authMiddleware.ValidateToken, RequiresRole("admin"), api.ActivateLocation)
 	app.Get("/api/shelves/:shelfId/locations", authMiddleware.ValidateToken, api.GetLocationsByShelfID)
 
-	// ── Location drill-down: batches stored at a specific slot ──
-	// MUST be registered before /api/locations/:id to avoid param collision
+	// MUST be before /api/locations/:id
 	app.Get("/api/locations/:id/batches", authMiddleware.ValidateToken, api.GetBatchesByLocation)
 
-	// ── Warehouse Map: full rack → shelf → location → batch tree ──
+	// Warehouse Map
 	app.Get("/api/warehouse/map", authMiddleware.ValidateToken, api.GetWarehouseMap)
 }

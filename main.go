@@ -1,10 +1,10 @@
 package main
 
 import (
+	localauth "lawyerSL-Backend/auth"
 	"lawyerSL-Backend/apiHandlers"
 	"lawyerSL-Backend/dao"
 	"lawyerSL-Backend/dbConfigs"
-	"lawyerSL-Backend/dto"
 	"lawyerSL-Backend/integrations"
 	"log"
 	"os"
@@ -21,32 +21,36 @@ func main() {
 	integrations.SetEnvironmentVariables()
 
 	app.Use(cors.New(cors.Config{
-		AllowOrigins: "http://localhost:8080,https://med-center-hub.vercel.app,https://medical.nadildinsara.me,https://*.vercel.app,https://medical-portal.codekongsl.com",
+		AllowOrigins: "http://localhost:3000,http://localhost:5173,http://localhost:8080,https://med-center-hub.vercel.app,https://medical.nadildinsara.me,https://*.vercel.app,https://medical-portal.codekongsl.com",
 		AllowHeaders: "Origin, Content-Type, Accept, Authorization",
 		AllowMethods: "GET, POST, PUT, DELETE, PATCH",
 	}))
 
+	// Serve built frontend (React/Vite) from ./frontend/dist
+	app.Static("/", "./frontend/dist")
+
+	// Serve uploaded files (images, reports) — used in offline/local mode
+	app.Static("/uploads", "./uploads")
+
+	// Connect to MongoDB
 	dbConfigs.ConnectMongoDB(os.Getenv("MONGODB_URI"))
+
+	// Start background jobs
 	dao.StartBillExpiryCron()
 
-	firebaseApp, err := apiHandlers.InitFirebaseApp()
-	if err != nil {
-		log.Fatalf("❌ Failed to initialize Firebase: %v", err)
-	}
+	// Seed super admin on startup (local auth — no Firebase)
+	localauth.InitializeSuperAdmin()
 
-	apiHandlers.InitializeSuperAdmin(firebaseApp)
+	// Build JWT auth middleware
+	authMiddleware := apiHandlers.NewAuthMiddleware()
 
-	authConfig := dto.AuthConfig{
-		FirebaseProjectID: os.Getenv("FIREBASE_PROJECT_ID"),
-	}
-
-	authMiddleware := apiHandlers.NewAuthMiddleware(authConfig, firebaseApp)
-
-	apiHandlers.SetupRoutes(app, authMiddleware, firebaseApp)
+	// Register all routes
+	apiHandlers.SetupRoutes(app, authMiddleware)
 
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "3000"
 	}
+	log.Printf("🚀 Server starting on port %s (Local Auth Mode — No Firebase)\n", port)
 	log.Fatal(app.Listen("0.0.0.0:" + port))
 }

@@ -5,11 +5,23 @@ import (
 )
 
 // GetMyProfile returns the current user's identity from their JWT claims.
-// Frontend can call this after login to get branchId and roles.
+// Frontend can call this after login to get branchId, role, and status.
 //
-// GET /auth/me
+// GET /auth/me  (also kept at this handler for legacy routing)
+//
+// Locals read (set by auth.JWTMiddleware):
+//   - userId   (also aliased as uid for backward-compat)
+//   - email
+//   - branchId
+//   - role
+//   - roles    []string
 func GetMyProfile(c *fiber.Ctx) error {
-	uid, _ := c.Locals("uid").(string)
+	userId, _ := c.Locals("userId").(string)
+	uid, _ := c.Locals("uid").(string) // backward-compat alias
+	if userId == "" {
+		userId = uid
+	}
+
 	email, _ := c.Locals("email").(string)
 	branchId, _ := c.Locals("branchId").(string)
 	role, _ := c.Locals("role").(string)
@@ -24,7 +36,8 @@ func GetMyProfile(c *fiber.Ctx) error {
 	}
 
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
-		"uid":          uid,
+		"userId":       userId,
+		"uid":          userId, // backward-compat field
 		"email":        email,
 		"branchId":     branchId,
 		"role":         role,
